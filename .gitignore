@@ -1,5 +1,5 @@
 .vscode
 .DS_Store
 
-/geonames
-/us_census_tiger
+/data/geonames
+/data/us_census_tiger
