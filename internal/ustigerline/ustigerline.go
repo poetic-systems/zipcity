@@ -1,11 +1,35 @@
 package ustigerline
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"slices"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-shapefile"
 )
+
+var ftpbase *url.URL
+var featureFTPPath = "FEATNAMES/"
+var edgeFTPPath = "EDGES/"
+var storagedir = "../../data/us_census_tiger/"
+
+var zipfiles = regexp.MustCompile(`tl_\d+_\d+_\w+\.zip`)
+
+func init() {
+	var err error
+	ftpbase, err = url.Parse("https://www2.census.gov/geo/tiger/TIGER2025/")
+	if err != nil {
+		panic(err)
+	}
+}
 
 // The All Lines shapefile (edges.shp) contains the geometry and attributes of each
 // topological primitive edge. Each edge has a unique TLID (TIGER/Line Identifier) value.
@@ -24,8 +48,8 @@ import (
 type ShapeFunc func(id string, attributes map[string]any, aliases []string, geometry geom.T) error
 
 func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
-	featnamesDbfPath := fmt.Sprintf("%s_featnames.zip", fileprefix)
-	edgesShpPath := fmt.Sprintf("%s_edges.zip", fileprefix)
+	featnamesDbfPath := fmt.Sprintf("%s%s_featnames.zip", storagedir, fileprefix)
+	edgesShpPath := fmt.Sprintf("%s%s_edges.zip", storagedir, fileprefix)
 
 	featnameIndex := make(map[string][]string)
 	featnameIndex2 := make(map[string][]string)
@@ -77,4 +101,106 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 		}
 	}
 	return nil
+}
+
+func DownloadFeaturesAndEdges() error {
+	return DownloadFeaturesAndEdgesFrom(ftpbase)
+}
+
+func DownloadFeaturesAndEdgesFrom(source *url.URL) error {
+	featureindex := source.JoinPath(featureFTPPath)
+	featurefiles, err := downloadFtpIndex(featureindex)
+	if err != nil {
+		return err
+	}
+
+	edgeindex := source.JoinPath(edgeFTPPath)
+	edgefiles, err := downloadFtpIndex(edgeindex)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(storagedir, 0755)
+	if err != nil {
+		return err
+	}
+
+	dir, err := os.Open(storagedir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+
+	for _, ff := range featurefiles {
+		err := downloadTigerfileZip(ff, dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, ef := range edgefiles {
+		err := downloadTigerfileZip(ef, dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
+	tigerfiles := make(map[string]*url.URL, 0)
+
+	resp, err := http.Get(indexurl.String())
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read body: %w", err)
+	}
+	bodyString := string(bodyBytes)
+
+	tigerfilelike := zipfiles.FindAllString(bodyString, -1)
+	for _, candidate := range tigerfilelike {
+		_, found := tigerfiles[candidate]
+		if !found {
+			tfurl := indexurl.JoinPath(candidate)
+			tigerfiles[candidate] = tfurl
+		}
+	}
+
+	return slices.Collect(func(yield func(u *url.URL) bool) {
+		for _, v := range tigerfiles {
+			if !yield(v) {
+				return
+			}
+		}
+	}), nil
+}
+
+func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
+	filename := path.Base(fileurl.Path)
+	filepath := filepath.Join(dir.Name(), filename)
+
+	// open the local file for writing first and only request
+	// the file via http if it doesn't exist.
+	out, err := os.OpenFile(filepath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil
+		}
+		return err
+	}
+	defer out.Close()
+
+	resp, err := http.Get(fileurl.String())
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }

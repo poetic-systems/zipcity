@@ -9,7 +9,7 @@ import (
 )
 
 func TestReadFeaturesAndEdges(t *testing.T) {
-	fileprefix := "../../data/us_census_tiger/tl_2025_01001"
+	fileprefix := "tl_2025_01001"
 
 	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
 	err := ustigerline.ReadFeaturesAndEdges(
@@ -21,5 +21,12 @@ func TestReadFeaturesAndEdges(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("Error from ustigerline.ReadZip(): %v", err)
+	}
+}
+
+func TestDownloadFeaturesAndEdges(t *testing.T) {
+	err := ustigerline.DownloadFeaturesAndEdges()
+	if err != nil {
+		t.Fatalf("Error from ustigerline.DownloadFeaturesAndEdges(): %v", err)
 	}
 }
