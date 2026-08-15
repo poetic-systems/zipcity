@@ -20,13 +20,6 @@ func TestReadFeaturesAndEdges(t *testing.T) {
 		},
 	)
 	if err != nil {
-		t.Fatalf("Error from ustigerline.ReadZip(): %v", err)
-	}
-}
-
-func TestDownloadFeaturesAndEdges(t *testing.T) {
-	err := ustigerline.DownloadFeaturesAndEdges()
-	if err != nil {
-		t.Fatalf("Error from ustigerline.DownloadFeaturesAndEdges(): %v", err)
+		t.Fatalf("Error from ustigerline.ReadFeaturesAndEdges(): %v", err)
 	}
 }

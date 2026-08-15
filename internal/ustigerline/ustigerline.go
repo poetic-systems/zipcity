@@ -1,9 +1,11 @@
 package ustigerline
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-shapefile"
@@ -52,7 +55,6 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 	edgesShpPath := fmt.Sprintf("%s%s_edges.zip", storagedir, fileprefix)
 
 	featnameIndex := make(map[string][]string)
-	featnameIndex2 := make(map[string][]string)
 
 	featnames, err := shapefile.ReadZipFile(featnamesDbfPath, nil)
 	if err != nil {
@@ -73,6 +75,8 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature
 			featnameIndex[tlid] = append(featnameIndex[tlid], fullname)
+			out, _ := json.MarshalIndent(fields, "", "  ")
+			fmt.Printf("%s", out)
 		}
 	}
 
@@ -89,10 +93,7 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 		edgeLinearID := fmt.Sprintf("%d", rawTLID)
 		matchedNames, found := featnameIndex[edgeLinearID]
 		if !found {
-			matchedNames, found = featnameIndex2[edgeLinearID]
-			if !found {
-				continue
-			}
+			continue
 		}
 
 		err := shapeFn(edgeLinearID, attributes, matchedNames, geometry)
@@ -103,49 +104,95 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 	return nil
 }
 
-func DownloadFeaturesAndEdges() error {
+func DownloadFeaturesAndEdges() ([]string, error) {
 	return DownloadFeaturesAndEdgesFrom(ftpbase)
 }
 
-func DownloadFeaturesAndEdgesFrom(source *url.URL) error {
+func DownloadFeaturesAndEdgesFrom(source *url.URL) ([]string, error) {
 	featureindex := source.JoinPath(featureFTPPath)
 	featurefiles, err := downloadFtpIndex(featureindex)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	edgeindex := source.JoinPath(edgeFTPPath)
 	edgefiles, err := downloadFtpIndex(edgeindex)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	counts := make(map[string]int, 0)
+	for _, v := range featurefiles {
+		b := path.Base(v.String())
+		end := strings.LastIndex(b, "_")
+		if end > 0 {
+			b = b[0:end]
+		}
+		counts[b] += 1
+	}
+	for _, v := range edgefiles {
+		b := path.Base(v.String())
+		end := strings.LastIndex(b, "_")
+		if end > 0 {
+			b = b[0:end]
+		}
+		counts[b] += 1
+	}
+	mismatched := slices.Collect(func(yield func(string) bool) {
+		for url, c := range counts {
+			if c < 2 {
+				if !yield(url) {
+					return
+				}
+			}
+		}
+	})
+	if len(mismatched) > 0 {
+		formatted, err := json.MarshalIndent(mismatched, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("Mismatched feature names and edges file names; error generating report: %w", err)
+		}
+		return nil, fmt.Errorf("Mismatched feature names and edges file names; report: %s", formatted)
 	}
 
 	err = os.MkdirAll(storagedir, 0755)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dir, err := os.Open(storagedir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer dir.Close()
 
 	for _, ff := range featurefiles {
 		err := downloadTigerfileZip(ff, dir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	for _, ef := range edgefiles {
 		err := downloadTigerfileZip(ef, dir)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	// make sure all expected files exist
+	allfiles := append(featurefiles, edgefiles...)
+	for _, v := range allfiles {
+		filename := path.Base(v.String())
+		filepath := filepath.Join(dir.Name(), filename)
+		out, err := os.OpenFile(filepath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
+		out.Close()
+		if err == nil || !errors.Is(err, os.ErrExist) {
+			return nil, fmt.Errorf("%s may not exist: %w", filename, err)
+		}
+	}
+
+	return slices.Collect(maps.Keys(counts)), nil
 }
 
 func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
