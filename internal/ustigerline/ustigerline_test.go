@@ -2,29 +2,24 @@ package ustigerline_test
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/jonas-p/go-shp"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
+	"github.com/twpayne/go-geom"
 )
 
-func TestReadZip(t *testing.T) {
-	filename := "../../data/us_census_tiger/tl_2025_01001_edges.zip"
-	fmt.Printf("Reading %s\n", filename)
-	ustigerline.ReadZip(
-		filename,
-		func(shape shp.Shape, row int, fields []shp.Field, reader *shp.ZipReader) error {
-			// print feature
-			fmt.Println(reflect.TypeOf(shape).Elem(), shape.BBox())
+func TestReadFeaturesAndEdges(t *testing.T) {
+	fileprefix := "../../data/us_census_tiger/tl_2025_01001"
 
-			// print attributes
-			for k, f := range fields {
-				val := reader.Attribute(k)
-				fmt.Printf("\t%v: %v\n", f, val)
-			}
-			fmt.Println()
+	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
+	err := ustigerline.ReadFeaturesAndEdges(
+		fileprefix,
+		func(id string, attributes map[string]any, aliases []string, geometry geom.T) error {
+			fmt.Printf("\nID: %s Name: %s\n\tAliases: %s\n", id, attributes["FULLNAME"], aliases)
 			return nil
 		},
 	)
+	if err != nil {
+		t.Fatalf("Error from ustigerline.ReadZip(): %v", err)
+	}
 }
