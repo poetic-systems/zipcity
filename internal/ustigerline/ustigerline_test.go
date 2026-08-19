@@ -14,8 +14,8 @@ func TestReadFeaturesAndEdges(t *testing.T) {
 	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
 	err := ustigerline.ReadFeaturesAndEdges(
 		fileprefix,
-		func(id string, attributes map[string]any, aliases []string, geometry geom.T) error {
-			fmt.Printf("\nID: %s Name: %s\n\tAliases: %s\n", id, attributes["FULLNAME"], aliases)
+		func(info *ustigerline.StreetInfo, attributes map[string]any, geometry geom.T) error {
+			fmt.Printf("\nID: %s Name: %s\n\tAliases: %s\n", info.TLID, info.Name, info.Alt)
 			return nil
 		},
 	)

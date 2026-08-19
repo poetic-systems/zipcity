@@ -48,7 +48,7 @@ func main() {
 	zipStreetData := []ZipStreetTuple{}
 
 	// Cache the census data locally if we don't already have it
-	prefixes, err := ustigerline.DownloadFeaturesAndEdges()
+	prefixes, err := ustigerline.DownloadAllRequiredTigerfiles()
 	if err != nil {
 		panic(err)
 	}
@@ -56,9 +56,9 @@ func main() {
 	for i, pre := range prefixes {
 		err := ustigerline.ReadFeaturesAndEdges(
 			pre,
-			func(id string, attributes map[string]any, aliases []string, geometry geom.T) error {
+			func(info *ustigerline.StreetInfo, attributes map[string]any, geometry geom.T) error {
 				out, _ := json.MarshalIndent(attributes, "", "  ")
-				fmt.Printf("\nName: %s\nAliases: %s\nAttributes: %s", attributes["FULLNAME"], aliases, out)
+				fmt.Printf("\nName: %s\nAliases: %s\nAttributes: %s", info.Name, info.Alt, out)
 
 				// FIXME: this zip code data won't work. It isn't set for a large
 				// number of streets. We might end up doing a per state lookup instead.
@@ -73,7 +73,7 @@ func main() {
 					zips = append(zips, zr)
 				}
 
-				for _, a := range aliases {
+				for _, a := range info.Alt {
 					for _, z := range zips {
 						zipStreetData = append(zipStreetData, ZipStreetTuple{
 							Zip:    z,

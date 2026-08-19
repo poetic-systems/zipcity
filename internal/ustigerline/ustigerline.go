@@ -22,6 +22,9 @@ import (
 var ftpbase *url.URL
 var featureFTPPath = "FEATNAMES/"
 var edgeFTPPath = "EDGES/"
+var addrFTPPath = "ADDR/"
+var facesFTPPath = "FACES/"
+var placeFTPPath = "PLACE/"
 var storagedir = "../../data/us_census_tiger/"
 
 var zipfiles = regexp.MustCompile(`tl_\d+_\d+_\w+\.zip`)
@@ -32,6 +35,13 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type RequiredTigerfiles struct {
+	Source *url.URL
+	Path   string
+	Suffix string
+	Set    string
 }
 
 // The All Lines shapefile (edges.shp) contains the geometry and attributes of each
@@ -47,14 +57,62 @@ func init() {
 // features are not included in the data set, but could be constructed using the All Lines
 // shapefile and the relationship tables).
 // See https://www2.census.gov/geo/pdfs/maps-data/data/tiger/tgrshp2008/rel_file_desc_2008.pdf
+//
+// 5.1.1 ZIP Codes and Address Ranges
+// The address numbers used to create address ranges are house number-street name style addresses (or
+// city-style addresses). A house number-street name style address minimally consists of a structure
+// number, street name, and a 5-digit ZIP Code (e.g., 213 Main Street 90210). In the 2025 TIGER/Line
+// Shapefiles, ZIP Codes are only associated to address ranges.
+// The ZIP Code is an attribute of the address ranges. The Address Ranges relationship file has a 5-digit
+// ZIP Code field containing a numeric code that may have leading zeroes. Both sides of a street typically
+// have the same ZIP Code, but this is not always true. Different ZIP Codes may serve different sides of a
+// street or cover addresses at each end of a street. Nearly all address ranges will have a ZIP Code, but
+// there are a few instances where unknown ZIP Codes result in null/blank values in the ZIP Code field.
 
-type ShapeFunc func(id string, attributes map[string]any, aliases []string, geometry geom.T) error
+type StreetFunc func(info *StreetInfo, attributes map[string]any, geometry geom.T) error
 
-func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
+type StreetInfo struct {
+	TLID     string
+	Name     string
+	Alt      []string
+	ZipCodes []string // may not be populated
+}
+
+type CityFunc func(info *CityInfo, attributes map[string]any, geometry geom.T) error
+type CityInfo struct {
+	PlaceFP  string
+	TFID     string
+	Name     string
+	ZipCodes []string // may not be populated
+}
+
+type AddressRangeFunc func(info *AddressRange, attributes map[string]any, geometry geom.T) error
+
+type AddressRange struct {
+	TLID string
+	// FromHouseNum string  // From Address range itself in Addr file
+	// ToHouseNum string    // From Address range itself in Addr file
+	// Side bool   // 0: left, 1: right
+	StreetName     string   // From FeatName associated with Edge
+	AltStreetNames []string // From FeatName associated with Edge
+	Zip            string   // From Address range itself in Addr file
+	PlaceFP        string   // From PlaceFP associated with TFID{Side} in Faces to Place file
+}
+
+// func ReadAddressRanges(fileprefix string, shapeFn StreetFunc) error {
+// 	addrDbfPath := fmt.Sprintf("%s%s_addr.zip", storagedir, fileprefix)
+// 	facesDbfPath := fmt.Sprintf("%s%s_faces.zip", storagedir, fileprefix)
+// 	// places files just use the state fipscode, not the county fips code
+// 	stateprefix := fileprefix[0 : len(fileprefix)-3]
+// 	placeDbfPath := fmt.Sprintf("%s%s_place.zip", storagedir, stateprefix)
+
+// }
+
+func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 	featnamesDbfPath := fmt.Sprintf("%s%s_featnames.zip", storagedir, fileprefix)
 	edgesShpPath := fmt.Sprintf("%s%s_edges.zip", storagedir, fileprefix)
 
-	featnameIndex := make(map[string][]string)
+	featnameIndex := make(map[string]*StreetInfo)
 
 	featnames, err := shapefile.ReadZipFile(featnamesDbfPath, nil)
 	if err != nil {
@@ -74,12 +132,28 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature
-			featnameIndex[tlid] = append(featnameIndex[tlid], fullname)
+			stInfo, ok := featnameIndex[tlid]
+			if !ok {
+				stInfo = &StreetInfo{
+					TLID:     tlid,
+					Name:     "",
+					Alt:      make([]string, 0),
+					ZipCodes: make([]string, 0),
+				}
+			}
+			stInfo.Alt = append(stInfo.Alt, fullname)
+			featnameIndex[tlid] = stInfo
 			out, _ := json.MarshalIndent(fields, "", "  ")
 			fmt.Printf("%s", out)
 		}
 	}
 
+	// addr also has TLID to tie address ranges back to edges. Each address range has
+	// a side of the road and a zip code, which we can use to loosely associate a zip
+	// code with a face / city. Loosely, because we are not tying the zipcode to where
+	// on the road the address range occurs (yet.)
+
+	//
 	edges, err := shapefile.ReadZipFile(edgesShpPath, nil)
 	if err != nil {
 		return err
@@ -91,12 +165,13 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 			continue
 		}
 		edgeLinearID := fmt.Sprintf("%d", rawTLID)
-		matchedNames, found := featnameIndex[edgeLinearID]
+		stInfo, found := featnameIndex[edgeLinearID]
 		if !found {
 			continue
 		}
+		stInfo.Name = fmt.Sprintf("%s", attributes["FULLNAME"])
 
-		err := shapeFn(edgeLinearID, attributes, matchedNames, geometry)
+		err := shapeFn(stInfo, attributes, geometry)
 		if err != nil {
 			return err
 		}
@@ -104,45 +179,53 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn ShapeFunc) error {
 	return nil
 }
 
-func DownloadFeaturesAndEdges() ([]string, error) {
-	return DownloadFeaturesAndEdgesFrom(ftpbase)
+func DownloadAllRequiredTigerfiles() ([]string, error) {
+	return DownloadRequiredTigerfiles([]RequiredTigerfiles{
+		{ftpbase, featureFTPPath, "_featnames", "county"},
+		{ftpbase, edgeFTPPath, "_edges", "county"},
+		{ftpbase, addrFTPPath, "_addr", "addr"},
+		{ftpbase, facesFTPPath, "_faces", "county"},
+		{ftpbase, placeFTPPath, "_place", "state"},
+	})
 }
 
-func DownloadFeaturesAndEdgesFrom(source *url.URL) ([]string, error) {
-	featureindex := source.JoinPath(featureFTPPath)
-	featurefiles, err := downloadFtpIndex(featureindex)
-	if err != nil {
-		return nil, err
+func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error) {
+	counts := make(map[string]map[string]int, 0)
+	setSizes := make(map[string]int, 0)
+	allfiles := make([]*url.URL, 0)
+	for _, req := range required {
+		source := req.Source
+		setSizes[req.Set] += 1
+		cnt, ok := counts[req.Set]
+		if !ok {
+			cnt = make(map[string]int, 0)
+			counts[req.Set] = cnt
+		}
+
+		sourceindex := source.JoinPath(req.Path)
+		sourcefiles, err := downloadFtpIndex(sourceindex)
+		if err != nil {
+			return nil, err
+		}
+		allfiles = append(allfiles, sourcefiles...)
+
+		for _, v := range sourcefiles {
+			b := path.Base(v.String())
+			end := strings.LastIndex(b, "_")
+			if end > 0 {
+				b = b[0:end]
+			}
+			cnt[b] += 1
+		}
 	}
 
-	edgeindex := source.JoinPath(edgeFTPPath)
-	edgefiles, err := downloadFtpIndex(edgeindex)
-	if err != nil {
-		return nil, err
-	}
-
-	counts := make(map[string]int, 0)
-	for _, v := range featurefiles {
-		b := path.Base(v.String())
-		end := strings.LastIndex(b, "_")
-		if end > 0 {
-			b = b[0:end]
-		}
-		counts[b] += 1
-	}
-	for _, v := range edgefiles {
-		b := path.Base(v.String())
-		end := strings.LastIndex(b, "_")
-		if end > 0 {
-			b = b[0:end]
-		}
-		counts[b] += 1
-	}
 	mismatched := slices.Collect(func(yield func(string) bool) {
-		for url, c := range counts {
-			if c < 2 {
-				if !yield(url) {
-					return
+		for setkey, set := range counts {
+			for url, c := range set {
+				if c < setSizes[setkey] {
+					if !yield(url) {
+						return
+					}
 				}
 			}
 		}
@@ -150,12 +233,12 @@ func DownloadFeaturesAndEdgesFrom(source *url.URL) ([]string, error) {
 	if len(mismatched) > 0 {
 		formatted, err := json.MarshalIndent(mismatched, "", "  ")
 		if err != nil {
-			return nil, fmt.Errorf("Mismatched feature names and edges file names; error generating report: %w", err)
+			return nil, fmt.Errorf("Mismatched required TIGER file names; error generating report: %w", err)
 		}
-		return nil, fmt.Errorf("Mismatched feature names and edges file names; report: %s", formatted)
+		return nil, fmt.Errorf("Mismatched required TIGER file names; report: %s, %v, %v, %d, %d", formatted, setSizes, counts, len(counts["county"]), len(mismatched))
 	}
 
-	err = os.MkdirAll(storagedir, 0755)
+	err := os.MkdirAll(storagedir, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -166,33 +249,25 @@ func DownloadFeaturesAndEdgesFrom(source *url.URL) ([]string, error) {
 	}
 	defer dir.Close()
 
-	for _, ff := range featurefiles {
-		err := downloadTigerfileZip(ff, dir)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	for _, ef := range edgefiles {
-		err := downloadTigerfileZip(ef, dir)
+	for _, rtf := range allfiles {
+		fmt.Printf("Downloading %s\n", rtf.String())
+		err := downloadTigerfileZip(rtf, dir)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// make sure all expected files exist
-	allfiles := append(featurefiles, edgefiles...)
 	for _, v := range allfiles {
 		filename := path.Base(v.String())
 		filepath := filepath.Join(dir.Name(), filename)
-		out, err := os.OpenFile(filepath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0666)
-		out.Close()
-		if err == nil || !errors.Is(err, os.ErrExist) {
+		_, err := os.Stat(filepath)
+		if err != nil || errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("%s may not exist: %w", filename, err)
 		}
 	}
 
-	return slices.Collect(maps.Keys(counts)), nil
+	return slices.Collect(maps.Keys(counts["county"])), nil
 }
 
 func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
