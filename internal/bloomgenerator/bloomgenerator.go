@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"os"
 	"text/template"
@@ -16,7 +15,6 @@ import (
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
-	"github.com/twpayne/go-geom"
 )
 
 // FIXME: this code is copy pasta from a Google search / AI Mode session, with minor
@@ -24,6 +22,16 @@ import (
 
 type ZipStreetTuple struct {
 	Zip    string
+	Street string
+}
+
+type ZipCityTuple struct {
+	Zip  string
+	City string
+}
+
+type CityStreetTuple struct {
+	City   string
 	Street string
 }
 
@@ -46,6 +54,8 @@ func main() {
 	// Data Ingestion Loop
 	// loop through the parsed US Census Bureau TIGER files here
 	zipStreetData := []ZipStreetTuple{}
+	zipCityData := []ZipCityTuple{}
+	cityStreetData := []CityStreetTuple{}
 
 	// Cache the census data locally if we don't already have it
 	prefixes, err := ustigerline.DownloadAllRequiredTigerfiles()
@@ -53,45 +63,40 @@ func main() {
 		panic(err)
 	}
 
-	for i, pre := range prefixes {
-		err := ustigerline.ReadFeaturesAndEdges(
+	for _, pre := range prefixes {
+		err := ustigerline.ReadAddressRanges(
 			pre,
-			func(info *ustigerline.StreetInfo, attributes map[string]any, geometry geom.T) error {
-				out, _ := json.MarshalIndent(attributes, "", "  ")
-				fmt.Printf("\nName: %s\nAliases: %s\nAttributes: %s", info.Name, info.Alt, out)
-
-				// FIXME: this zip code data won't work. It isn't set for a large
-				// number of streets. We might end up doing a per state lookup instead.
-				zips := make([]string, 0)
-				zl := attributes["ZIPL"].(string)
-				if len(zl) > 0 {
-					zips = append(zips, zl)
+			func(info *ustigerline.AddressRange) error {
+				// out, _ := json.MarshalIndent(info, "", "  ")
+				// fmt.Printf("Address Range: %s\n", out)
+				if info.City != nil {
+					zipCityData = append(zipCityData, ZipCityTuple{
+						Zip:  info.Zip,
+						City: info.City.Name,
+					})
 				}
-
-				zr := attributes["ZIPR"].(string)
-				if len(zr) > 0 {
-					zips = append(zips, zr)
+				if info.Street != nil {
+					zipStreetData = append(zipStreetData, ZipStreetTuple{
+						Zip:    info.Zip,
+						Street: info.Street.Name,
+					})
 				}
-
-				for _, a := range info.Alt {
-					for _, z := range zips {
-						zipStreetData = append(zipStreetData, ZipStreetTuple{
-							Zip:    z,
-							Street: a,
-						})
-					}
+				if info.City != nil && info.Street != nil {
+					cityStreetData = append(cityStreetData, CityStreetTuple{
+						City:   info.City.Name,
+						Street: info.Street.Name,
+					})
 				}
 
 				return nil
 			},
 		)
 		if err != nil {
-			panic(fmt.Errorf("Error from ustigerline.ReadFeaturesAndEdges(): %w", err))
-		}
-		if i > 0 {
-			os.Exit(0)
+			fmt.Printf("Error from ustigerline.ReadAddressRanges(): %s\n", err)
+			// panic(fmt.Errorf("Error from ustigerline.ReadAddressRanges(): %w", err))
 		}
 	}
+	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d\n", len(zipCityData), len(zipStreetData), len(cityStreetData))
 
 	for _, record := range zipStreetData {
 		// Generate the lookup key
