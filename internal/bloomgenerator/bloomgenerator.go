@@ -6,10 +6,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/gob"
 	"fmt"
 	"os"
+	"path"
 	"text/template"
 	"time"
 
@@ -45,11 +45,10 @@ func main() {
 	// for the city, region, zip lookup. We'll need to do better than that.
 
 	now := time.Now()
-
-	// Initialize Bloom Filters
-	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
-	// streetFilter := bloom.NewWithEstimates(30000000, 0.001)
-	streetFilter := bloom.NewWithEstimates(50000, 0.001)
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
 
 	// Data Ingestion Loop
 	// loop through the parsed US Census Bureau TIGER files here
@@ -96,7 +95,19 @@ func main() {
 			// panic(fmt.Errorf("Error from ustigerline.ReadAddressRanges(): %w", err))
 		}
 	}
-	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d\n", len(zipCityData), len(zipStreetData), len(cityStreetData))
+	numZip2City := uint(len(zipCityData))
+	numZip2Sreet := uint(len(zipStreetData))
+	numCity2Street := uint(len(cityStreetData))
+	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d\n", numZip2City, numZip2Sreet, numCity2Street)
+
+	// Initialize Bloom Filters
+	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
+	// With several address range files absent (mostly for islands):
+	//  Counts - zip-city: 4396668 zip-street: 20604757 city-street: 4396668
+
+	// Add ~1/8 of overhead to the count for the base capacity
+	nZS := numZip2Sreet + (numZip2Sreet >> 3)
+	streetFilter := bloom.NewWithEstimates(nZS, 0.01)
 
 	for _, record := range zipStreetData {
 		// Generate the lookup key
@@ -104,10 +115,65 @@ func main() {
 		streetFilter.Add([]byte(key))
 	}
 
-	// Serialize the Bloom Filter into raw bytes
-	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	if err := encoder.Encode(streetFilter); err != nil {
+	// Serialize the Zip to Street Bloom Filter
+	err = writeAsGob(
+		path.Join(
+			cwd,
+			"generated",
+			"compiled_filter",
+			fmt.Sprintf("%s.bin", "zip-street"),
+		),
+		streetFilter,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Add ~1/8 of overhead to the count for the base capacity
+	nZC := numZip2City + (numZip2City >> 3)
+	cityFilter := bloom.NewWithEstimates(nZC, 0.01)
+
+	for _, record := range zipCityData {
+		// Generate the lookup key
+		key := fmt.Sprintf("%s:%s", record.Zip, record.City)
+		cityFilter.Add([]byte(key))
+	}
+
+	// Serialize the Zip to City Bloom Filter
+	err = writeAsGob(
+		path.Join(
+			cwd,
+			"generated",
+			"compiled_filter",
+			fmt.Sprintf("%s.bin", "zip-city"),
+		),
+		cityFilter,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Add ~1/8 of overhead to the count for the base capacity
+	nCS := numCity2Street + (numCity2Street >> 3)
+	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.01)
+
+	for _, record := range cityStreetData {
+		// Generate the lookup key
+		key := fmt.Sprintf("%s:%s", record.City, record.Street)
+		cityStreetFilter.Add([]byte(key))
+	}
+
+	// Serialize the City to Street Bloom Filter
+	err = writeAsGob(
+		path.Join(
+			cwd,
+			"generated",
+			"compiled_filter",
+			fmt.Sprintf("%s.bin", "city-street"),
+		),
+		cityStreetFilter,
+	)
+	if err != nil {
 		panic(err)
 	}
 
@@ -115,20 +181,45 @@ func main() {
 	// because a bloom filter should have a relatively random distribution
 	// of bits set if its hashing algorithm is working properly.
 
+	// TODO: consider adjusting the template to allow loading bloom filters
+	// on a per zip code basis. As it stands, nothing about this template
+	// actually requires code generation, it could just be a normal source
+	// file that employs "go:embed".
+
 	// Generate the Go File containing the embedded asset
 	tmpl := `// DO NOT EDIT! Code generated at {{ .Now }} by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/gob"
+	"fmt"
 	bloom "github.com/bits-and-blooms/bloom/v3"
 )
 
-// LoadStreetFilter restores the compiled filter in memory
-func LoadStreetFilter() (*bloom.BloomFilter, error) {
+type CompiledFilter string
+
+const (
+	ZipCity	    CompiledFilter = "zip-city"
+	ZipStreet	  CompiledFilter = "zip-street"
+	CityStreet	CompiledFilter = "city-street"
+)
+
+// LoadFilter restores the compiled filter in memory
+func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 	var filter bloom.BloomFilter
-	buf := bytes.NewBuffer(RawStreetFilterBytes)
+	var buf *bytes.Buffer
+	switch name {
+	case ZipStreet:
+		buf = bytes.NewBuffer(RawZipStreetFilterBytes)
+	case ZipCity:
+		buf = bytes.NewBuffer(RawZipCityFilterBytes)
+	case CityStreet:
+		buf = bytes.NewBuffer(RawCityStreetFilterBytes)
+	default:
+		return nil, fmt.Errorf("Unsupported compiled filter name: %s", name)
+	}
 	decoder := gob.NewDecoder(buf)
 	if err := decoder.Decode(&filter); err != nil {
 		return nil, err
@@ -136,10 +227,17 @@ func LoadStreetFilter() (*bloom.BloomFilter, error) {
 	return &filter, nil
 }
 
-// RawStreetFilterBytes holds the pre-compiled Bloom filter
-var RawStreetFilterBytes = []byte({
-	{{range .Bytes}}{{.}},{{end}}
-})
+// RawZipStreetFilterBytes holds the pre-compiled zip-street Bloom filter
+//go:embed zip-street.bin
+var RawZipStreetFilterBytes []byte
+
+// RawZipCityFilterBytes holds the pre-compiled zip-city Bloom filter
+//go:embed zip-city.bin
+var RawZipCityFilterBytes []byte
+
+// RawCityStreetFilterBytes holds the pre-compiled city-street Bloom filter
+//go:embed city-street.bin
+var RawCityStreetFilterBytes []byte
 
 `
 
@@ -155,13 +253,28 @@ var RawStreetFilterBytes = []byte({
 	}
 	defer outFile.Close()
 
-	// Pass the byte slice to the template
 	err = t.Execute(outFile, map[string]interface{}{
-		"Bytes": buf.Bytes(),
-		"Now":   now.UTC().Format(time.RFC3339),
+		"Now": now.UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("Successfully generated %s\n", outFile.Name())
+}
+
+func writeAsGob(filename string, data *bloom.BloomFilter) error {
+	filedir := path.Dir(filename)
+	err := os.MkdirAll(filedir, 0755)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := gob.NewEncoder(file)
+	return encoder.Encode(data)
 }
