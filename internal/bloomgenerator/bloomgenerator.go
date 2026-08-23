@@ -52,7 +52,7 @@ func main() {
 
 	// Data Ingestion Loop
 	// loop through the parsed US Census Bureau TIGER files here
-	zipStreetData := []ZipStreetTuple{}
+	zipStreetData := map[string][]ZipStreetTuple{}
 	zipCityData := []ZipCityTuple{}
 	cityStreetData := []CityStreetTuple{}
 
@@ -74,11 +74,17 @@ func main() {
 						City: info.City.Name,
 					})
 				}
-				if info.Street != nil {
-					zipStreetData = append(zipStreetData, ZipStreetTuple{
+				if len(info.Zip) > 4 && info.Street != nil {
+					zipscope := info.Zip[0:2]
+					scoped, exists := zipStreetData[zipscope]
+					if !exists {
+						scoped = make([]ZipStreetTuple, 0)
+					}
+					scoped = append(scoped, ZipStreetTuple{
 						Zip:    info.Zip,
 						Street: info.Street.Name,
 					})
+					zipStreetData[zipscope] = scoped
 				}
 				if info.City != nil && info.Street != nil {
 					cityStreetData = append(cityStreetData, CityStreetTuple{
@@ -105,28 +111,35 @@ func main() {
 	// With several address range files absent (mostly for islands):
 	//  Counts - zip-city: 4396668 zip-street: 20604757 city-street: 4396668
 
-	// Add ~1/8 of overhead to the count for the base capacity
-	nZS := numZip2Sreet + (numZip2Sreet >> 3)
-	streetFilter := bloom.NewWithEstimates(nZS, 0.01)
+	zipstreetfiles := make(map[string]string, 0)
+	for zipscope, streets := range zipStreetData {
+		numThisZip2Sreet := uint(len(streets))
+		// Add ~1/8 of overhead to the count for the base capacity
+		nZS := numThisZip2Sreet + (numThisZip2Sreet >> 3)
+		streetFilter := bloom.NewWithEstimates(nZS, 0.01)
 
-	for _, record := range zipStreetData {
-		// Generate the lookup key
-		key := fmt.Sprintf("%s:%s", record.Zip, record.Street)
-		streetFilter.Add([]byte(key))
-	}
+		for _, record := range streets {
+			// Generate the lookup key
+			key := fmt.Sprintf("%s:%s", record.Zip, record.Street)
+			streetFilter.Add([]byte(key))
+		}
 
-	// Serialize the Zip to Street Bloom Filter
-	err = writeAsGob(
-		path.Join(
-			cwd,
-			"generated",
-			"compiled_filter",
-			fmt.Sprintf("%s.bin", "zip-street"),
-		),
-		streetFilter,
-	)
-	if err != nil {
-		panic(err)
+		// Serialize the scoped Zip to Street Bloom Filter
+		zsVarName := fmt.Sprintf("ZipStreet%s", zipscope)
+		zsidentifier := fmt.Sprintf("%s-%s", "zip-street", zipscope)
+		zipstreetfiles[zsVarName] = zsidentifier
+		err = writeAsGob(
+			path.Join(
+				cwd,
+				"generated",
+				"compiled_filter",
+				fmt.Sprintf("%s.bin", zsidentifier),
+			),
+			streetFilter,
+		)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// Add ~1/8 of overhead to the count for the base capacity
@@ -201,9 +214,11 @@ import (
 type CompiledFilter string
 
 const (
-	ZipCity	    CompiledFilter = "zip-city"
-	ZipStreet	  CompiledFilter = "zip-street"
-	CityStreet	CompiledFilter = "city-street"
+  ZipCity     CompiledFilter = "zip-city"
+  CityStreet  CompiledFilter = "city-street"
+{{- range $varName, $zsidentifier := .Files }}
+	{{ $varName }} CompiledFilter = "{{- $zsidentifier -}}"
+{{ end }}
 )
 
 // LoadFilter restores the compiled filter in memory
@@ -211,12 +226,14 @@ func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 	var filter bloom.BloomFilter
 	var buf *bytes.Buffer
 	switch name {
-	case ZipStreet:
-		buf = bytes.NewBuffer(RawZipStreetFilterBytes)
 	case ZipCity:
 		buf = bytes.NewBuffer(RawZipCityFilterBytes)
 	case CityStreet:
 		buf = bytes.NewBuffer(RawCityStreetFilterBytes)
+	{{- range $varName, $zsidentifier := .Files }}
+	case {{ $varName -}}:
+		buf = bytes.NewBuffer(Raw{{- $varName -}}FilterBytes)
+	{{- end }}
 	default:
 		return nil, fmt.Errorf("Unsupported compiled filter name: %s", name)
 	}
@@ -227,9 +244,10 @@ func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 	return &filter, nil
 }
 
-// RawZipStreetFilterBytes holds the pre-compiled zip-street Bloom filter
-//go:embed zip-street.bin
-var RawZipStreetFilterBytes []byte
+{{ range $varName, $zsidentifier := .Files }}
+//go:embed {{ $zsidentifier -}}.bin
+var Raw{{ $varName }}FilterBytes []byte    
+{{ end }}
 
 // RawZipCityFilterBytes holds the pre-compiled zip-city Bloom filter
 //go:embed zip-city.bin
@@ -254,7 +272,8 @@ var RawCityStreetFilterBytes []byte
 	defer outFile.Close()
 
 	err = t.Execute(outFile, map[string]interface{}{
-		"Now": now.UTC().Format(time.RFC3339),
+		"Files": zipstreetfiles,
+		"Now":   now.UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		panic(err)
