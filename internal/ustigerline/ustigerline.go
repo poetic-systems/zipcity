@@ -26,9 +26,10 @@ var edgeFTPPath = "EDGES/"
 var addrFTPPath = "ADDR/"
 var facesFTPPath = "FACES/"
 var placeFTPPath = "PLACE/"
+var stateFTPPath = "STATE/"
 var storagedir = filepath.Join(strings.Split("./data/us_census_tiger/", "/")...)
 
-var zipfiles = regexp.MustCompile(`tl_\d+_\d+_\w+\.zip`)
+var zipfiles = regexp.MustCompile(`tl_\d+_(\d+|us)_\w+\.zip`)
 
 func init() {
 	var err error
@@ -89,6 +90,12 @@ type CityInfo struct {
 	Geo        geom.T
 }
 
+type StateInfo struct {
+	Name    string
+	USPS    string
+	StateFP string
+}
+
 type AddressRangeFunc func(info *AddressRange) error
 
 type AddressRange struct {
@@ -99,6 +106,36 @@ type AddressRange struct {
 	Side   string      // "L" or "R"
 	Street *StreetInfo // From Edge and Features via the TLID
 	City   *CityInfo   // From PlaceFP associated with TFID{Side} in Faces to Place file via edges
+}
+
+func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
+	statesDbfPath := filepath.Join(storagedir, "state", fmt.Sprintf("%s_us_state.zip", fileprefix))
+
+	usstates, err := shapefile.ReadZipFile(statesDbfPath, nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "not a valid zip file") {
+			os.Remove(statesDbfPath)
+		}
+		return nil, fmt.Errorf("unable to read %s: %w", statesDbfPath, err)
+	}
+
+	stateMap := make(map[string]*StateInfo)
+	for usst := range usstates.Records() {
+		stfips := fmt.Sprintf("%v", usst["STATEFP"])
+		stname := fmt.Sprintf("%v", usst["NAME"])
+		stusps := fmt.Sprintf("%v", usst["STUSPS"])
+
+		if len(stfips) > 0 {
+			// fmt.Printf("State: %s USPS: %s StateFP: %s\n", stname, stusps, stfips)
+			stateMap[stfips] = &StateInfo{
+				Name:    stname,
+				USPS:    stusps,
+				StateFP: stfips,
+			}
+		}
+	}
+
+	return stateMap, nil
 }
 
 func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
@@ -129,10 +166,8 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 			continue
 		}
 		tlid := fmt.Sprintf("%v", rawTLID)
-		rawSide, _ := ar["SIDE"]
-		arSide := fmt.Sprintf("%s", rawSide)
-		rawZip, _ := ar["ZIP"]
-		arZip := fmt.Sprintf("%v", rawZip)
+		arSide := fmt.Sprintf("%s", ar["SIDE"])
+		arZip := fmt.Sprintf("%v", ar["ZIP"])
 
 		if tlid != "" && arSide != "" {
 			// build up the list of tfids for this place
@@ -358,6 +393,7 @@ func DownloadAllRequiredTigerfiles() ([]string, error) {
 		{ftpbase, addrFTPPath, "_addr", "addr"},
 		{ftpbase, facesFTPPath, "_faces", "county"},
 		{ftpbase, placeFTPPath, "_place", "state"},
+		{ftpbase, stateFTPPath, "_state", "us"},
 	})
 }
 

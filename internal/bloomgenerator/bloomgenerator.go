@@ -29,6 +29,7 @@ type ZipCityTuple struct {
 
 type CityStreetTuple struct {
 	City   string
+	State  string
 	Street string
 }
 
@@ -65,12 +66,23 @@ func main() {
 		panic(err)
 	}
 
+	// remove the county-level fips code from the first prefix to get the base prefix
+	// for requesting state fips codes and abbreviations
+	baseprefix := prefixes[0][0 : len(prefixes[0])-6]
+	stateMap, err := ustigerline.ReadStates(baseprefix)
+	if err != nil {
+		panic(err)
+	}
+
 	for _, pre := range prefixes {
 		err := ustigerline.ReadAddressRanges(
 			pre,
 			func(info *ustigerline.AddressRange) error {
 				// out, _ := json.MarshalIndent(info, "", "  ")
 				// fmt.Printf("Address Range: %s\n", out)
+				statefips := pre[len(pre)-5 : len(pre)-3]
+				stateInfo := stateMap[statefips]
+
 				if info.City != nil {
 					zipCityData = append(zipCityData, ZipCityTuple{
 						Zip:  info.Zip,
@@ -93,6 +105,7 @@ func main() {
 				if info.City != nil && info.Street != nil {
 					cityStreetData = append(cityStreetData, CityStreetTuple{
 						City:   info.City.Name,
+						State:  stateInfo.USPS,
 						Street: info.Street.Name,
 					})
 				}
@@ -180,7 +193,7 @@ func main() {
 
 	for _, record := range cityStreetData {
 		// Generate the lookup key
-		key := fmt.Sprintf("%s:%s", record.City, record.Street)
+		key := fmt.Sprintf("%s:%s:%s", record.City, record.State, record.Street)
 		cityStreetFilter.Add([]byte(key))
 	}
 
