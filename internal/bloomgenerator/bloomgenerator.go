@@ -17,9 +17,6 @@ import (
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
 )
 
-// FIXME: this code is copy pasta from a Google search / AI Mode session, with minor
-// changes. It needs a thorough rework to ensure that it works as expected.
-
 type ZipStreetTuple struct {
 	Zip    string
 	Street string
@@ -40,9 +37,15 @@ func main() {
 	// can get away with just encoding the challenging ones: the ones
 	// that start with directionals, those that are numeric or
 	// alphabetic and might need to be spelled out or not, etc.
-	// NOTE: the current generated template file is 100MB without any
-	// data in the bloom filter - just zeros. We also have not accounted
-	// for the city, region, zip lookup. We'll need to do better than that.
+
+	// NOTE: we are writing the zip-city and city-street maps directly to
+	// binary files that are about 6MB and loaded via go:embed. We break
+	// the zip-street relation up in to 100 different binary files to keep
+	// them small and isolate changes. These are also loaded via go:embed.
+	// The previous strategy of writing the bytes directly into the
+	// generated template file used ~16 bits per bit of data, resulting
+	// in a 100MB generated source file. The cumulative size of the
+	// compiled filter directory is now about 40 MB.
 
 	now := time.Now()
 	cwd, err := os.Getwd()
@@ -75,6 +78,7 @@ func main() {
 					})
 				}
 				if len(info.Zip) > 4 && info.Street != nil {
+					// NOTE: We store and load bloom filters on a per zip code prefix basis.
 					zipscope := info.Zip[0:2]
 					scoped, exists := zipStreetData[zipscope]
 					if !exists {
@@ -110,6 +114,10 @@ func main() {
 	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
 	// With several address range files absent (mostly for islands):
 	//  Counts - zip-city: 4396668 zip-street: 20604757 city-street: 4396668
+
+	// NOTE: We don't attempt to compress the bloom filter bytes because a
+	// bloom filter should have a relatively random distribution of bits set
+	// if its hashing algorithm is working properly.
 
 	zipstreetfiles := make(map[string]string, 0)
 	for zipscope, streets := range zipStreetData {
@@ -190,16 +198,7 @@ func main() {
 		panic(err)
 	}
 
-	// Should we further compress the buffer bytes? It probably won't work
-	// because a bloom filter should have a relatively random distribution
-	// of bits set if its hashing algorithm is working properly.
-
-	// TODO: consider adjusting the template to allow loading bloom filters
-	// on a per zip code basis. As it stands, nothing about this template
-	// actually requires code generation, it could just be a normal source
-	// file that employs "go:embed".
-
-	// Generate the Go File containing the embedded asset
+	// Generate the Go source code containing the embedded asset
 	tmpl := `// DO NOT EDIT! Code generated at {{ .Now }} by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
