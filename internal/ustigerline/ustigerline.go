@@ -128,7 +128,7 @@ func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
 		if len(stfips) > 0 {
 			// fmt.Printf("State: %s USPS: %s StateFP: %s\n", stname, stusps, stfips)
 			stateMap[stfips] = &StateInfo{
-				Name:    stname,
+				Name:    strings.ToUpper(stname),
 				USPS:    stusps,
 				StateFP: stfips,
 			}
@@ -166,7 +166,7 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 			continue
 		}
 		tlid := fmt.Sprintf("%v", rawTLID)
-		arSide := fmt.Sprintf("%s", ar["SIDE"])
+		arSide := strings.ToUpper(fmt.Sprintf("%s", ar["SIDE"]))
 		arZip := fmt.Sprintf("%v", ar["ZIP"])
 
 		if tlid != "" && arSide != "" {
@@ -299,7 +299,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			// fmt.Printf("No city info found for '%s'\n", placeFP)
 			continue
 		}
-		ctyInfo.Name = fmt.Sprintf("%s", pl["NAME"])
+		ctyInfo.Name = strings.ToUpper(fmt.Sprintf("%s", pl["NAME"]))
 		ctyInfo.Attributes = pl
 		ctyInfo.Geo = geometry
 
@@ -337,7 +337,11 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 			continue
 		}
 		tlid := fmt.Sprintf("%v", rawTLID)
-		fullname, _ := fields["FULLNAME"].(string)
+		rawFullname, found := fields["FULLNAME"]
+		if !found {
+			continue
+		}
+		fullname := strings.ToUpper(fmt.Sprintf("%v", rawFullname))
 
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature
@@ -374,7 +378,12 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		if !found {
 			continue
 		}
-		stInfo.Name = fmt.Sprintf("%s", attributes["FULLNAME"])
+		rawFullname, found := attributes["FULLNAME"]
+		if found {
+			fullname := strings.ToUpper(fmt.Sprintf("%v", rawFullname))
+			stInfo.Name = fullname
+		}
+
 		stInfo.Attributes = attributes
 		stInfo.Geo = geometry
 

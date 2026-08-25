@@ -14,6 +14,7 @@ import (
 	"time"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
+	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
 )
 
@@ -141,7 +142,7 @@ func main() {
 
 		for _, record := range streets {
 			// Generate the lookup key
-			key := fmt.Sprintf("%s:%s", record.Zip, record.Street)
+			key := bloomkeys.KeyZipStreet(record.Zip, record.Street)
 			streetFilter.Add([]byte(key))
 		}
 
@@ -169,7 +170,7 @@ func main() {
 
 	for _, record := range zipCityData {
 		// Generate the lookup key
-		key := fmt.Sprintf("%s:%s", record.Zip, record.City)
+		key := bloomkeys.KeyZipCity(record.Zip, record.City)
 		cityFilter.Add([]byte(key))
 	}
 
@@ -193,7 +194,7 @@ func main() {
 
 	for _, record := range cityStreetData {
 		// Generate the lookup key
-		key := fmt.Sprintf("%s:%s:%s", record.City, record.State, record.Street)
+		key := bloomkeys.KeyCityStateStreet(record.City, record.State, record.Street)
 		cityStreetFilter.Add([]byte(key))
 	}
 
@@ -220,18 +221,37 @@ import (
 	_ "embed"
 	"encoding/gob"
 	"fmt"
+	"regexp"
 	bloom "github.com/bits-and-blooms/bloom/v3"
 )
+
+var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
 
 type CompiledFilter string
 
 const (
-  ZipCity     CompiledFilter = "zip-city"
-  CityStreet  CompiledFilter = "city-street"
+	Unrecognized  CompiledFilter = ""
+  ZipCity       CompiledFilter = "zip-city"
+  CityStreet    CompiledFilter = "city-street"
 {{- range $varName, $zsidentifier := .Files }}
-	{{ $varName }} CompiledFilter = "{{- $zsidentifier -}}"
-{{ end }}
+	{{ $varName }}   CompiledFilter = "{{- $zsidentifier -}}"
+{{- end }}
 )
+
+func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
+	if !zip5pattern.MatchString(zip) {
+		return Unrecognized, fmt.Errorf("5-digit zip code required")
+	}
+	zip2 := zip[0:2]
+	filterid := fmt.Sprintf("zip-street-%s", zip2)
+	switch filterid {
+{{- range $varName, $zsidentifier := .Files }}
+	case "{{- $zsidentifier -}}":
+		return {{ $varName }}, nil
+{{- end }}
+	}
+	return Unrecognized, fmt.Errorf("5-digit zip code required")
+}
 
 // LoadFilter restores the compiled filter in memory
 func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
@@ -247,7 +267,7 @@ func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 		buf = bytes.NewBuffer(Raw{{- $varName -}}FilterBytes)
 	{{- end }}
 	default:
-		return nil, fmt.Errorf("Unsupported compiled filter name: %s", name)
+		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
 	}
 	decoder := gob.NewDecoder(buf)
 	if err := decoder.Decode(&filter); err != nil {
@@ -270,8 +290,10 @@ var RawZipCityFilterBytes []byte
 var RawCityStreetFilterBytes []byte
 
 `
-
-	t := template.Must(template.New("filter").Parse(tmpl))
+	templateFuncMap := template.FuncMap{
+		"tick": func() string { return "`" },
+	}
+	t := template.Must(template.New("filter").Funcs(templateFuncMap).Parse(tmpl))
 
 	err = os.MkdirAll("./generated/compiled_filter", 0755)
 	if err != nil {
