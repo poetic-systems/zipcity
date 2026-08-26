@@ -23,7 +23,7 @@ under a Creative Commons Attribution 4.0 License.
 are available without cost because
 [the U.S. government releases these publications into the public domain](https://www.census.gov/about/policies/open-gov.html).
 
-## Pupose
+## Purpose
 
 ### Address Parsing is Data Dependant
 
@@ -102,10 +102,10 @@ A similar problem occurs with addresses like
 123 E ST IDAHO FALLS ID 83402
 ```
 
-where it is not clear whether "E ST" means "EAST ST" or "E ST". Similar problems
-can occur in cites like "ST PAUL, MN", where "ST" means "Saint" as part of the
-city name, not "Street" as the street suffix. Determining what is correct is all
-data dependent.
+where it is not clear whether "E ST" means "EAST ST" or the alphabetical "E ST".
+Similar problems can occur in cites like "ST PAUL, MN", where "ST" means "Saint"
+as part of the city name, not "Street" as the street suffix. In each case,
+determining the correct interpretation of address components is data dependent.
 
 ### Addresses Can Be Associated With People
 
@@ -130,9 +130,33 @@ parser and kept in memory. This eliminates both network latency and service cost
 concerns. It also protects patient privacy because there is no additional
 network request to log.
 
-(To be tested:) By converting indicies of street, city, region, and zip code
-data in to bloom filters we can significantly reduce the size of the data needed
-to determine a valid street name or city name for a given zip code or
-city-region tuple. This library, as a build process, processes its input data in
-to bloom filters which are then serialized in to a form that can be efficiently
-committed to and distributed with the library.
+By converting indicies of street, city, region, and zip code data in to bloom
+filters we can significantly reduce the size of the data needed to determine a
+valid street name or city name for a given zip code or city-region tuple. This
+library, as a pre-build code generation process, processes its input data in to
+bloom filters which are then serialized in to relatively small binary files that
+can be efficiently committed to and distributed with the library. These files
+are embedded via `go:embed` during the build process so they are both stored and
+distributed as efficiently as possible and readily available for use by the
+library immediately.
+
+## Current Known Issues
+
+Because the current version of this library is built from the US Census Bureau's
+TIGER files, some street names don't appear in the current dataset. There are
+two known primary causes:
+
+1. Several TIGER files on the Census Bureau's FTP site return an error page with
+   a 200 status code instead of the listed TIGER file. These files are:
+   - <https://www2.census.gov/geo/tiger/TIGER2025/EDGES/tl_2025_48239_edges.zip>
+   - <https://www2.census.gov/geo/tiger/TIGER2025/ADDR/tl_2025_13193_addr.zip>
+   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_21061_faces.zip>
+   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_21089_faces.zip>
+   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_13273_faces.zip>
+   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_42065_faces.zip>
+     Additionally, there are no address range files for the Marshal Islands and
+     the Northern Marianas Islands.
+2. The process for identifying zip codes, cities, and streets for the data set
+   currently relies on residential address ranges. If a street does not contain
+   any residential address ranges such that the Census Bureau would track them
+   the street is unlikely to appear in the appropriate bloom filter.

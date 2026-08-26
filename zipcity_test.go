@@ -1,49 +1,125 @@
 package zipcity_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/poetic-systems/zipcity"
 )
 
-func TestCheckZipAndCity(t *testing.T) {
-	zip := "94553"
-	city := "MARTINEZ"
-	found, err := zipcity.CheckZipAndCity(zip, city)
-	if err != nil {
-		t.Fatalf("Error checking zip: '%s' and city: '%s': %s", zip, city, err)
-	}
+var testData = []struct {
+	Street string
+	City   string
+	State  string
+	Zip    string
+}{
+	{"BLUE RIDGE DR", "MARTINEZ", "CA", "94553"},
+	{
+		Street: "W 200 N",
+		City:   "NORTH SALT LAKE",
+		State:  "UT",
+		Zip:    "84054",
+	},
+	{
 
-	if !found {
-		t.Fatalf("Expected zip: '%s' and city: '%s' to be found", zip, city)
+		Street: "W 9000 S",
+		City:   "West Jordan",
+		State:  "UT",
+		Zip:    "84088",
+	},
+	{
+		Street: "Fox Park Dr",
+		City:   "West Jordan",
+		State:  "UT",
+		Zip:    "84088",
+	},
+}
+
+type ZipAndCity struct {
+	Zip  string
+	City string
+}
+
+func TestCheckZipAndCity(t *testing.T) {
+	testcases := slices.Collect(func(yield func(ZipAndCity) bool) {
+		for _, td := range testData {
+			if !yield(ZipAndCity{
+				Zip:  td.Zip,
+				City: td.City,
+			}) {
+				return
+			}
+		}
+	})
+
+	for _, tc := range testcases {
+		found, err := zipcity.CheckZipAndCity(tc.Zip, tc.City)
+		if err != nil {
+			t.Fatalf("Error checking zip: '%s' and city: '%s': %s", tc.Zip, tc.City, err)
+		}
+
+		if !found {
+			t.Fatalf("Expected zip: '%s' and city: '%s' to be found", tc.Zip, tc.City)
+		}
 	}
+}
+
+type ZipAndStreet struct {
+	Zip    string
+	Street string
 }
 
 func TestCheckZipAndStreet(t *testing.T) {
-	zip := "94553"
-	street := "BLUE RIDGE DR"
+	testcases := slices.Collect(func(yield func(ZipAndStreet) bool) {
+		for _, td := range testData {
+			if !yield(ZipAndStreet{
+				Zip:    td.Zip,
+				Street: td.Street,
+			}) {
+				return
+			}
+		}
+	})
 
-	found, err := zipcity.CheckZipAndStreet(zip, street)
-	if err != nil {
-		t.Fatalf("Error checking zip: '%s' and street: '%s': %s", zip, street, err)
-	}
+	for _, tc := range testcases {
+		found, err := zipcity.CheckZipAndStreet(tc.Zip, tc.Street)
+		if err != nil {
+			t.Fatalf("Error checking zip: '%s' and street: '%s': %s", tc.Zip, tc.Street, err)
+		}
 
-	if !found {
-		t.Fatalf("Expected zip: '%s' and street: '%s' to be found", zip, street)
+		if !found {
+			t.Fatalf("Expected zip: '%s' and street: '%s' to be found", tc.Zip, tc.Street)
+		}
 	}
 }
 
+type CityStateAndStreet struct {
+	City   string
+	State  string
+	Street string
+}
+
 func TestCheckCityStateAndStreet(t *testing.T) {
-	city := "MARTINEZ"
-	state := "CA"
-	street := "BLUE RIDGE DR"
+	testcases := slices.Collect(func(yield func(CityStateAndStreet) bool) {
+		for _, td := range testData {
+			if !yield(CityStateAndStreet{
+				City:   td.City,
+				State:  td.State,
+				Street: td.Street,
+			}) {
+				return
+			}
+		}
+	})
 
-	found, err := zipcity.CheckCityStateAndStreet(city, state, street)
-	if err != nil {
-		t.Fatalf("Error checking city: '%s' state: '%s' and street: '%s': %s", city, state, street, err)
-	}
+	for _, tc := range testcases {
+		found, err := zipcity.CheckCityStateAndStreet(tc.City, tc.State, tc.Street)
+		if err != nil {
+			t.Fatalf("Error checking city: '%s' state: '%s' and street: '%s': %s", tc.City, tc.State, tc.Street, err)
+		}
 
-	if !found {
-		t.Fatalf("Expected city: '%s' state: '%s' and street: '%s' to be found", city, state, street)
+		if !found {
+			t.Fatalf("Expected city: '%s' state: '%s' and street: '%s' to be found", tc.City, tc.State, tc.Street)
+		}
 	}
 }

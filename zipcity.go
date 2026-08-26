@@ -3,6 +3,7 @@ package zipcity
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
@@ -23,7 +24,7 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyZipCity(zip, city)
+	key := bloomkeys.KeyZipCity(zip, strings.ToUpper(city))
 	return f.TestString(key), nil
 }
 
@@ -45,7 +46,7 @@ func CheckZipAndStreet(zip, street string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyZipStreet(zip, street)
+	key := bloomkeys.KeyZipStreet(zip, strings.ToUpper(street))
 	return f.TestString(key), nil
 }
 
@@ -66,6 +67,10 @@ func CheckCityStateAndStreet(city, state, street string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyCityStateStreet(city, state, street)
+	key := bloomkeys.KeyCityStateStreet(
+		strings.ToUpper(city),
+		strings.ToUpper(state),
+		strings.ToUpper(street),
+	)
 	return f.TestString(key), nil
 }
