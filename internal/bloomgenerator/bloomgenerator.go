@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"text/template"
 	"time"
 
@@ -34,6 +35,9 @@ type CityStreetTuple struct {
 	Street string
 }
 
+var nonalpha = regexp.MustCompile(`[^a-zA-Z ]+`)
+var nonalphanum = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
+
 func main() {
 	// TODO: See if we actually need all of the streets of if we
 	// can get away with just encoding the challenging ones: the ones
@@ -57,9 +61,9 @@ func main() {
 
 	// Data Ingestion Loop
 	// loop through the parsed US Census Bureau TIGER files here
-	zipStreetData := map[string][]ZipStreetTuple{}
-	zipCityData := []ZipCityTuple{}
-	cityStreetData := []CityStreetTuple{}
+	zipStreetData := map[string]map[string]ZipStreetTuple{}
+	zipCityData := map[string]ZipCityTuple{}
+	cityStreetData := map[string]CityStreetTuple{}
 
 	// Cache the census data locally if we don't already have it
 	prefixes, err := ustigerline.DownloadAllRequiredTigerfiles()
@@ -75,53 +79,90 @@ func main() {
 		panic(err)
 	}
 
+	numZip2City := uint(0)
+	numZip2Sreet := uint(0)
+	numCity2Street := uint(0)
 	for _, pre := range prefixes {
-		err := ustigerline.ReadAddressRanges(
-			pre,
-			func(info *ustigerline.AddressRange) error {
-				// out, _ := json.MarshalIndent(info, "", "  ")
-				// fmt.Printf("Address Range: %s\n", out)
-				statefips := pre[len(pre)-5 : len(pre)-3]
-				stateInfo := stateMap[statefips]
-
-				if info.City != nil {
-					zipCityData = append(zipCityData, ZipCityTuple{
-						Zip:  info.Zip,
-						City: info.City.Name,
-					})
-				}
-				if len(info.Zip) > 4 && info.Street != nil {
-					// NOTE: We store and load bloom filters on a per zip code prefix basis.
-					zipscope := info.Zip[0:2]
-					scoped, exists := zipStreetData[zipscope]
-					if !exists {
-						scoped = make([]ZipStreetTuple, 0)
-					}
-					scoped = append(scoped, ZipStreetTuple{
-						Zip:    info.Zip,
-						Street: info.Street.Name,
-					})
-					zipStreetData[zipscope] = scoped
-				}
-				if info.City != nil && info.Street != nil {
-					cityStreetData = append(cityStreetData, CityStreetTuple{
-						City:   info.City.Name,
-						State:  stateInfo.USPS,
-						Street: info.Street.Name,
-					})
-				}
-
-				return nil
-			},
-		)
+		allSides, err := ustigerline.ReadStreetSides(pre)
 		if err != nil {
-			fmt.Printf("Error from ustigerline.ReadAddressRanges(): %s\n", err)
-			// panic(fmt.Errorf("Error from ustigerline.ReadAddressRanges(): %w", err))
+			fmt.Printf("Error from ustigerline.ReadStreetSides(): %s\n", err)
+			continue
+		}
+
+		// out, _ := json.MarshalIndent(info, "", "  ")
+		// fmt.Printf("Address Range: %s\n", out)
+		statefips := pre[len(pre)-5 : len(pre)-3]
+		stateInfo := stateMap[statefips]
+
+		for _, side := range allSides {
+			cty := ""
+			if side.City != nil {
+				cty = side.City.Name
+			}
+			street := ""
+			if side.Street != nil {
+				street = side.Street.Name
+			}
+			// if (len(cty) > 0 && nonalpha.MatchString(cty)) ||
+			// 	(len(street) > 0 && nonalphanum.MatchString(street)) ||
+			// 	(len(side.Zip) > 0 && nonalphanum.MatchString(side.Zip)) {
+			// 	fmt.Printf("Non-alphabetical characters found in name associated with side. Zip: %s City: %s Street: %s\n", side.Zip, cty, street)
+			// }
+			// if (len(cty) > 0 && strings.Contains(cty, "JORDAN")) &&
+			// 	(len(street) > 0 && strings.Contains(street, "FOX") || strings.Contains(street, "9200")) {
+			// 	fmt.Printf("found Zip: %s City: %s Street: %s or: %v\n", side.Zip, cty, street, side.Street.Alt)
+			// }
+			if len(cty) > 0 && len(side.Zip) > 4 {
+				key := bloomkeys.KeyZipCity(side.Zip, cty)
+				_, found := zipCityData[key]
+				if !found {
+					zipCityData[key] = ZipCityTuple{
+						Zip:  side.Zip,
+						City: cty,
+					}
+					numZip2City += 1
+				}
+			}
+			if len(side.Zip) > 4 && len(street) > 0 {
+				// NOTE: We store and load bloom filters on a per zip code prefix basis.
+				zipscope := side.Zip[0:2]
+				scoped, exists := zipStreetData[zipscope]
+				if !exists {
+					scoped = make(map[string]ZipStreetTuple, 0)
+				}
+				// make sure we include the primary name as well as the alternative names
+				streetnames := append(side.Street.Alt, street)
+				for _, stname := range streetnames {
+					key := bloomkeys.KeyZipStreet(side.Zip, stname)
+					_, found := scoped[key]
+					if !found {
+						scoped[key] = ZipStreetTuple{
+							Zip:    side.Zip,
+							Street: stname,
+						}
+						zipStreetData[zipscope] = scoped
+						numZip2Sreet += 1
+					}
+				}
+			}
+			if len(cty) > 0 && len(street) > 0 {
+				// make sure we include the primary name as well as the alternative names
+				streetnames := append(side.Street.Alt, street)
+				for _, stname := range streetnames {
+					key := bloomkeys.KeyCityStateStreet(cty, stateInfo.USPS, stname)
+					_, found := cityStreetData[key]
+					if !found {
+						cityStreetData[key] = CityStreetTuple{
+							City:   cty,
+							State:  stateInfo.USPS,
+							Street: stname,
+						}
+						numCity2Street += 1
+					}
+				}
+			}
 		}
 	}
-	numZip2City := uint(len(zipCityData))
-	numZip2Sreet := uint(len(zipStreetData))
-	numCity2Street := uint(len(cityStreetData))
 	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d\n", numZip2City, numZip2Sreet, numCity2Street)
 
 	// Initialize Bloom Filters
@@ -140,9 +181,7 @@ func main() {
 		nZS := numThisZip2Sreet + (numThisZip2Sreet >> 3)
 		streetFilter := bloom.NewWithEstimates(nZS, 0.01)
 
-		for _, record := range streets {
-			// Generate the lookup key
-			key := bloomkeys.KeyZipStreet(record.Zip, record.Street)
+		for key := range streets {
 			streetFilter.Add([]byte(key))
 		}
 
@@ -168,9 +207,7 @@ func main() {
 	nZC := numZip2City + (numZip2City >> 3)
 	cityFilter := bloom.NewWithEstimates(nZC, 0.01)
 
-	for _, record := range zipCityData {
-		// Generate the lookup key
-		key := bloomkeys.KeyZipCity(record.Zip, record.City)
+	for key := range zipCityData {
 		cityFilter.Add([]byte(key))
 	}
 
@@ -192,9 +229,7 @@ func main() {
 	nCS := numCity2Street + (numCity2Street >> 3)
 	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.01)
 
-	for _, record := range cityStreetData {
-		// Generate the lookup key
-		key := bloomkeys.KeyCityStateStreet(record.City, record.State, record.Street)
+	for key := range cityStreetData {
 		cityStreetFilter.Add([]byte(key))
 	}
 

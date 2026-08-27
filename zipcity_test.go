@@ -28,7 +28,13 @@ var testData = []struct {
 		Zip:    "84088",
 	},
 	{
-		Street: "Fox Park Dr",
+		Street: "W Fox Park Dr",
+		City:   "West Jordan",
+		State:  "UT",
+		Zip:    "84088",
+	},
+	{
+		Street: "W 9200 S",
 		City:   "West Jordan",
 		State:  "UT",
 		Zip:    "84088",

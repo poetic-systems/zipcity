@@ -101,6 +101,14 @@ type AddressRangeFunc func(info *AddressRange) error
 type AddressRange struct {
 	// FromHouseNum string  // From Address range itself in Addr file
 	// ToHouseNum string    // From Address range itself in Addr file
+	TLID string
+	Zip  string // From Address range itself in Addr file
+	Side string // "L" or "R"
+}
+
+type StreetSide struct {
+	// FromHouseNum string  // From Address range itself in Addr file
+	// ToHouseNum string    // From Address range itself in Addr file
 	TLID   string
 	Zip    string      // From Address range itself in Addr file
 	Side   string      // "L" or "R"
@@ -136,6 +144,97 @@ func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
 	}
 
 	return stateMap, nil
+}
+
+func tlidSideKey(tlid, side string) string {
+	return fmt.Sprintf("%s-%s", tlid, side)
+}
+
+func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
+	allSides := make(map[string]*StreetSide)
+
+	tfidMap := make(map[string][]string)
+	// get the street from edges and features
+	// and set up lookup via faces
+	err := ReadFeaturesAndEdges(fileprefix, func(
+		stInfo *StreetInfo,
+	) error {
+		rTfid := fmt.Sprintf("%v", stInfo.Attributes["TFIDR"])
+		if len(rTfid) > 0 {
+			side := &StreetSide{
+				TLID:   stInfo.TLID,
+				Street: stInfo,
+				Side:   "R",
+			}
+			k := tlidSideKey(stInfo.TLID, "R")
+			allSides[k] = side
+			tlidkeys, exists := tfidMap[rTfid]
+			if !exists {
+				tlidkeys = make([]string, 0)
+			}
+			tlidkeys = append(tlidkeys, k)
+			tfidMap[rTfid] = tlidkeys
+		}
+
+		lTfid := fmt.Sprintf("%v", stInfo.Attributes["TFIDL"])
+		if len(lTfid) > 0 {
+			side := &StreetSide{
+				TLID:   stInfo.TLID,
+				Street: stInfo,
+				Side:   "L",
+			}
+			k := tlidSideKey(stInfo.TLID, "L")
+			allSides[k] = side
+			tlidkeys, exists := tfidMap[lTfid]
+			if !exists {
+				tlidkeys = make([]string, 0)
+			}
+			tlidkeys = append(tlidkeys, k)
+			tfidMap[lTfid] = tlidkeys
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("unable to get base edge data for sides: %w", err)
+	}
+
+	// get the city for the left and right faces
+	err = ReadFacesAndPlaces(fileprefix, func(
+		ctyInfo *CityInfo,
+	) error {
+		for _, tfid := range ctyInfo.TFID {
+			tlidkeys := tfidMap[tfid]
+			for _, sideTlidkey := range tlidkeys {
+				side, ok := allSides[sideTlidkey]
+				if ok {
+					side.City = ctyInfo
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("unable to associate city data to side data: %s\n", err)
+		// return nil, fmt.Errorf("unable to associate city data to side data: %w", err)
+	}
+
+	err = ReadAddressRanges(fileprefix, func(
+		addrInfo *AddressRange,
+	) error {
+		k := tlidSideKey(addrInfo.TLID, addrInfo.Side)
+		side, ok := allSides[k]
+		if ok {
+			side.Zip = addrInfo.Zip
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("unable to associate address range data to side data: %s\n", err)
+		// return nil, fmt.Errorf("unable to associate address range data to side data: %w", err)
+	}
+
+	return allSides, nil
 }
 
 func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
@@ -185,38 +284,6 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 			addrMap[tlid] = arInfo
 		}
 	}
-
-	addrTfidMap := make(map[string]*AddressRange)
-	// get the street from edges and features
-	// and set up lookup via faces
-	ReadFeaturesAndEdges(fileprefix, func(
-		stInfo *StreetInfo,
-	) error {
-		arInfo, ok := addrMap[stInfo.TLID]
-		if ok {
-			arInfo.Street = stInfo
-			rawTFID := stInfo.Attributes["TFIDR"]
-			if arInfo.Side == "L" {
-				rawTFID = stInfo.Attributes["TFIDL"]
-			}
-			tfid := fmt.Sprintf("%v", rawTFID)
-			addrTfidMap[tfid] = arInfo
-		}
-		return nil
-	})
-
-	// get the city for the left anf right faces
-	ReadFacesAndPlaces(fileprefix, func(
-		ctyInfo *CityInfo,
-	) error {
-		for _, tfid := range ctyInfo.TFID {
-			arInfo, ok := addrTfidMap[tfid]
-			if ok {
-				arInfo.City = ctyInfo
-			}
-		}
-		return nil
-	})
 
 	for _, arInfo := range addrMap {
 		err := addrFn(arInfo)

@@ -46,7 +46,7 @@ func TestReadAddressRanges(t *testing.T) {
 	err := ustigerline.ReadAddressRanges(
 		fileprefix,
 		func(info *ustigerline.AddressRange) error {
-			fmt.Printf("\nID: %s Street: %s Side: %s\nZip: %s City: %s\n", info.TLID, info.Street.Name, info.Side, info.Zip, info.City.Name)
+			fmt.Printf("\nID: %s Side: %s\nZip: %s\n", info.TLID, info.Side, info.Zip)
 			return nil
 		},
 	)

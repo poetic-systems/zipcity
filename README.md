@@ -156,7 +156,3 @@ two known primary causes:
    - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_42065_faces.zip>
      Additionally, there are no address range files for the Marshal Islands and
      the Northern Marianas Islands.
-2. The process for identifying zip codes, cities, and streets for the data set
-   currently relies on residential address ranges. If a street does not contain
-   any residential address ranges such that the Census Bureau would track them
-   the street is unlikely to appear in the appropriate bloom filter.
