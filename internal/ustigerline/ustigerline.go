@@ -129,9 +129,9 @@ func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
 
 	stateMap := make(map[string]*StateInfo)
 	for usst := range usstates.Records() {
-		stfips := fmt.Sprintf("%v", usst["STATEFP"])
-		stname := fmt.Sprintf("%v", usst["NAME"])
-		stusps := fmt.Sprintf("%v", usst["STUSPS"])
+		stfips := asString(usst["STATEFP"])
+		stname := asString(usst["NAME"])
+		stusps := asString(usst["STUSPS"])
 
 		if len(stfips) > 0 {
 			// fmt.Printf("State: %s USPS: %s StateFP: %s\n", stname, stusps, stfips)
@@ -159,7 +159,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 	err := ReadFeaturesAndEdges(fileprefix, func(
 		stInfo *StreetInfo,
 	) error {
-		rTfid := fmt.Sprintf("%v", stInfo.Attributes["TFIDR"])
+		rTfid := asString(stInfo.Attributes["TFIDR"])
 		if len(rTfid) > 0 {
 			side := &StreetSide{
 				TLID:   stInfo.TLID,
@@ -176,7 +176,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 			tfidMap[rTfid] = tlidkeys
 		}
 
-		lTfid := fmt.Sprintf("%v", stInfo.Attributes["TFIDL"])
+		lTfid := asString(stInfo.Attributes["TFIDL"])
 		if len(lTfid) > 0 {
 			side := &StreetSide{
 				TLID:   stInfo.TLID,
@@ -264,9 +264,9 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 		if !found {
 			continue
 		}
-		tlid := fmt.Sprintf("%v", rawTLID)
-		arSide := strings.ToUpper(fmt.Sprintf("%s", ar["SIDE"]))
-		arZip := fmt.Sprintf("%v", ar["ZIP"])
+		tlid := asString(rawTLID)
+		arSide := strings.ToUpper(asString(ar["SIDE"]))
+		arZip := asString(ar["ZIP"])
 
 		if tlid != "" && arSide != "" {
 			// build up the list of tfids for this place
@@ -323,9 +323,9 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			fmt.Printf("No TFID found in %s\n", out)
 			continue
 		}
-		tfid := fmt.Sprintf("%v", rawTFID)
+		tfid := asString(rawTFID)
 		rawPlaceFP, _ := facefields["PLACEFP"]
-		placefp := fmt.Sprintf("%v", rawPlaceFP)
+		placefp := asString(rawPlaceFP)
 
 		// fmt.Printf("TFID: '%s' PLACEFP: '%s'\n", tfid, placefp)
 
@@ -360,7 +360,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			// fmt.Printf("No PLACEFP found in %s\n", out)
 			continue
 		}
-		placeFP := fmt.Sprintf("%v", rawPlaceFP)
+		placeFP := asString(rawPlaceFP)
 		ctyInfo, found := placefpMap[placeFP]
 		if !found {
 			// fmt.Printf("No city info found for '%s'\n", placeFP)
@@ -403,12 +403,12 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		if !found {
 			continue
 		}
-		tlid := fmt.Sprintf("%v", rawTLID)
+		tlid := asString(rawTLID)
 		rawFullname, found := fields["FULLNAME"]
 		if !found {
 			continue
 		}
-		fullname := strings.ToUpper(fmt.Sprintf("%v", rawFullname))
+		fullname := strings.ToUpper(asString(rawFullname))
 
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature
@@ -440,14 +440,14 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		if !found {
 			continue
 		}
-		edgeTLID := fmt.Sprintf("%v", rawTLID)
+		edgeTLID := asString(rawTLID)
 		stInfo, found := featnameIndex[edgeTLID]
 		if !found {
 			continue
 		}
 		rawFullname, found := attributes["FULLNAME"]
 		if found {
-			fullname := strings.ToUpper(fmt.Sprintf("%v", rawFullname))
+			fullname := strings.ToUpper(asString(rawFullname))
 			stInfo.Name = fullname
 		}
 
@@ -663,4 +663,21 @@ func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
 	defer reader.Close()
 
 	return err
+}
+
+func asString(input interface{}) string {
+	s, ok := input.(string)
+	if ok {
+		// fmt.Printf("Formatting %v as string\n", input)
+		return fmt.Sprintf("%s", s)
+	}
+
+	d, ok := input.(int)
+	if ok {
+		// fmt.Printf("Formatting %v as int\n", input)
+		return fmt.Sprintf("%d", d)
+	}
+
+	// fmt.Printf("Formatting %v using Sprintf(v)\n", input)
+	return fmt.Sprintf("%v", input)
 }

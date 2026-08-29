@@ -7,10 +7,12 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"regexp"
+	"strings"
 	"text/template"
 	"time"
 
@@ -64,6 +66,7 @@ func main() {
 	zipStreetData := map[string]map[string]ZipStreetTuple{}
 	zipCityData := map[string]ZipCityTuple{}
 	cityStreetData := map[string]CityStreetTuple{}
+	streetOnlyData := map[string]*ustigerline.StreetSide{}
 
 	// Cache the census data locally if we don't already have it
 	prefixes, err := ustigerline.DownloadAllRequiredTigerfiles()
@@ -82,6 +85,7 @@ func main() {
 	numZip2City := uint(0)
 	numZip2Sreet := uint(0)
 	numCity2Street := uint(0)
+	numStreetOnly := uint(0)
 	for _, pre := range prefixes {
 		allSides, err := ustigerline.ReadStreetSides(pre)
 		if err != nil {
@@ -89,8 +93,6 @@ func main() {
 			continue
 		}
 
-		// out, _ := json.MarshalIndent(info, "", "  ")
-		// fmt.Printf("Address Range: %s\n", out)
 		statefips := pre[len(pre)-5 : len(pre)-3]
 		stateInfo := stateMap[statefips]
 
@@ -100,18 +102,23 @@ func main() {
 				cty = side.City.Name
 			}
 			street := ""
+			alts := ""
 			if side.Street != nil {
 				street = side.Street.Name
+				altbytes, err := json.Marshal(side.Street.Alt)
+				if err != nil {
+					alts = string(altbytes)
+				}
 			}
 			// if (len(cty) > 0 && nonalpha.MatchString(cty)) ||
 			// 	(len(street) > 0 && nonalphanum.MatchString(street)) ||
 			// 	(len(side.Zip) > 0 && nonalphanum.MatchString(side.Zip)) {
 			// 	fmt.Printf("Non-alphabetical characters found in name associated with side. Zip: %s City: %s Street: %s\n", side.Zip, cty, street)
 			// }
-			// if (len(cty) > 0 && strings.Contains(cty, "JORDAN")) &&
-			// 	(len(street) > 0 && strings.Contains(street, "FOX") || strings.Contains(street, "9200")) {
-			// 	fmt.Printf("found Zip: %s City: %s Street: %s or: %v\n", side.Zip, cty, street, side.Street.Alt)
-			// }
+			if len(street) > 0 && (strings.Contains(street, "Ó ") ||
+				strings.Contains(alts, "Ó ")) {
+				// fmt.Printf("found Zip: %s City: %s Street: %s or: %s\n", side.Zip, cty, street, alts)
+			}
 			if len(cty) > 0 && len(side.Zip) > 4 {
 				key := bloomkeys.KeyZipCity(side.Zip, cty)
 				_, found := zipCityData[key]
@@ -161,9 +168,13 @@ func main() {
 					}
 				}
 			}
+			if len(street) > 0 && len(cty) == 0 && len(side.Zip) == 0 {
+				streetOnlyData[street] = side
+				numStreetOnly += 1
+			}
 		}
 	}
-	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d\n", numZip2City, numZip2Sreet, numCity2Street)
+	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d street-only: %d\n", numZip2City, numZip2Sreet, numCity2Street, numStreetOnly)
 
 	// Initialize Bloom Filters
 	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
