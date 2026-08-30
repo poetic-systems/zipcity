@@ -248,7 +248,11 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 		return fmt.Errorf("unable to read %s: %w", addrDbfPath, err)
 	}
 
-	// Multiple Address Ranges map to the same TLID (edge feature)
+	// Multiple Address Ranges map to the same TLID (edge feature), and both
+	// sides of an edge are separate ranges under that one TLID. The map is
+	// therefore keyed by TLID *and* side: keying it by TLID alone let the two
+	// sides overwrite each other, so only whichever side happened to be read
+	// last kept its ZIP Code. See #5.
 	addrMap := make(map[string]*AddressRange)
 
 	// addressranges has TLID to tie address ranges back to edges. Each address range
@@ -268,21 +272,28 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 		arSide := strings.ToUpper(asString(ar["SIDE"]))
 		arZip := asString(ar["ZIP"])
 
-		if tlid != "" && arSide != "" {
-			// build up the list of tfids for this place
-			arInfo, ok := addrMap[tlid]
-			if !ok {
-				arInfo = &AddressRange{
-					TLID: tlid,
-					Zip:  "",
-				}
-			}
-			arInfo.Zip = arZip
-			if arSide == "L" || arSide == "R" {
-				arInfo.Side = arSide
-			}
-			addrMap[tlid] = arInfo
+		// A record that names neither side cannot be attached to a side of the
+		// road, and previously still overwrote the ZIP Code of whichever side
+		// had been recorded before it.
+		if tlid == "" || (arSide != "L" && arSide != "R") {
+			continue
 		}
+
+		k := tlidSideKey(tlid, arSide)
+		arInfo, ok := addrMap[k]
+		if !ok {
+			arInfo = &AddressRange{
+				TLID: tlid,
+				Side: arSide,
+			}
+		}
+		// The documentation above notes that a few address ranges carry a blank
+		// ZIP Code. One of those must not erase a good one read earlier for the
+		// same side.
+		if arZip != "" && arZip != "<nil>" {
+			arInfo.Zip = arZip
+		}
+		addrMap[k] = arInfo
 	}
 
 	for _, arInfo := range addrMap {
