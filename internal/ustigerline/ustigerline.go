@@ -98,6 +98,10 @@ type StateInfo struct {
 
 type AddressRangeFunc func(info *AddressRange) error
 
+// AddressRange is one ZIP Code serving one side of one edge. TIGER records an
+// address range per run of house numbers, so a single side of an edge has many
+// of them; we keep only the ZIP Code, so the ranges of a side are reported as
+// the distinct ZIP Codes they name, in the order the file gives them.
 type AddressRange struct {
 	// FromHouseNum string  // From Address range itself in Addr file
 	// ToHouseNum string    // From Address range itself in Addr file
@@ -109,8 +113,11 @@ type AddressRange struct {
 type StreetSide struct {
 	// FromHouseNum string  // From Address range itself in Addr file
 	// ToHouseNum string    // From Address range itself in Addr file
-	TLID   string
-	Zip    string      // From Address range itself in Addr file
+	TLID string
+	// Zips holds every ZIP Code the address ranges give this side of the
+	// edge. Addresses at each end of a street may be served by different ZIP
+	// Codes, so a side has no single one.
+	Zips   []string    // From Address ranges themselves in Addr file
 	Side   string      // "L" or "R"
 	Street *StreetInfo // From Edge and Features via the TLID
 	City   *CityInfo   // From PlaceFP associated with TFID{Side} in Faces to Place file via edges
@@ -225,7 +232,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 		k := tlidSideKey(addrInfo.TLID, addrInfo.Side)
 		side, ok := allSides[k]
 		if ok {
-			side.Zip = addrInfo.Zip
+			side.Zips = append(side.Zips, addrInfo.Zip)
 		}
 		return nil
 	})
@@ -248,12 +255,17 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 		return fmt.Errorf("unable to read %s: %w", addrDbfPath, err)
 	}
 
-	// Multiple Address Ranges map to the same TLID (edge feature), and both
-	// sides of an edge are separate ranges under that one TLID. The map is
-	// therefore keyed by TLID *and* side: keying it by TLID alone let the two
-	// sides overwrite each other, so only whichever side happened to be read
-	// last kept its ZIP Code. See #5.
-	addrMap := make(map[string]*AddressRange)
+	// Many address ranges map to the same TLID (edge feature): both sides of
+	// an edge are described under that one TLID, and each side is described by
+	// a range per run of house numbers. Neither the edge nor the side has a
+	// single ZIP Code, so ranges are grouped by TLID *and* side and every
+	// distinct ZIP Code on a side is kept. Recording one ZIP Code per TLID, or
+	// one per side, let a later range overwrite an earlier one and threw away
+	// most of what the file says. See #5.
+	sideZips := make(map[string][]string)
+	// Sides are reported in the order the file first names them so that a
+	// regenerated filter does not churn on map ordering alone.
+	sideOrder := make([]AddressRange, 0)
 
 	// addressranges has TLID to tie address ranges back to edges. Each address range
 	// also has a side of the road and a zip code, which we can use to loosely associate
@@ -279,27 +291,32 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 			continue
 		}
 
+		// The documentation above notes that a few address ranges carry no ZIP
+		// Code. Such a range tells us nothing about the side it describes.
+		if arZip == "" || arZip == "<nil>" {
+			continue
+		}
+
 		k := tlidSideKey(tlid, arSide)
-		arInfo, ok := addrMap[k]
-		if !ok {
-			arInfo = &AddressRange{
-				TLID: tlid,
-				Side: arSide,
-			}
+		zips, seen := sideZips[k]
+		if !seen {
+			sideOrder = append(sideOrder, AddressRange{TLID: tlid, Side: arSide})
 		}
-		// The documentation above notes that a few address ranges carry a blank
-		// ZIP Code. One of those must not erase a good one read earlier for the
-		// same side.
-		if arZip != "" && arZip != "<nil>" {
-			arInfo.Zip = arZip
+		if slices.Contains(zips, arZip) {
+			// Most of a side's ranges repeat its ZIP Code; they differ only in
+			// the house numbers, which we do not keep.
+			continue
 		}
-		addrMap[k] = arInfo
+		sideZips[k] = append(zips, arZip)
 	}
 
-	for _, arInfo := range addrMap {
-		err := addrFn(arInfo)
-		if err != nil {
-			return err
+	for _, side := range sideOrder {
+		for _, arZip := range sideZips[tlidSideKey(side.TLID, side.Side)] {
+			arInfo := &AddressRange{TLID: side.TLID, Side: side.Side, Zip: arZip}
+			err := addrFn(arInfo)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
