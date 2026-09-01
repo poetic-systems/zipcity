@@ -3,6 +3,7 @@ package ustigerline_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,14 +54,14 @@ func cachedAddrPrefix(t *testing.T) string {
 	return ""
 }
 
-// Both sides of an edge are separate address ranges sharing one TLID, and each
-// side carries its own ZIP Code. Collecting them under the TLID alone let the
-// second side read overwrite the first, so an edge that should have yielded a
-// ZIP Code for each side yielded one for whichever side was read last. See #5.
-func TestBothSidesOfAnEdgeKeepTheirOwnZip(t *testing.T) {
+// Many address ranges share one TLID: both sides of an edge are described
+// under it, and each side is described by a range per run of house numbers.
+// Recording one ZIP Code per TLID let the second side overwrite the first, and
+// recording one per side let the second range overwrite the first. See #5.
+func TestEverySideKeepsEveryZipOfItsAddressRanges(t *testing.T) {
 	fileprefix := cachedAddrPrefix(t)
 
-	zips := map[string]map[string]string{}
+	zips := map[string]map[string][]string{}
 	err := ustigerline.ReadAddressRanges(
 		fileprefix,
 		func(info *ustigerline.AddressRange) error {
@@ -68,15 +69,19 @@ func TestBothSidesOfAnEdgeKeepTheirOwnZip(t *testing.T) {
 				t.Errorf("address range for TLID with side %q; want L or R", info.Side)
 				return nil
 			}
+			if info.Zip == "" {
+				t.Errorf("address range reported with no ZIP Code")
+				return nil
+			}
 			sides, ok := zips[info.TLID]
 			if !ok {
-				sides = map[string]string{}
+				sides = map[string][]string{}
 				zips[info.TLID] = sides
 			}
-			if _, repeated := sides[info.Side]; repeated {
-				t.Errorf("side %s of an edge was reported more than once", info.Side)
+			if slices.Contains(sides[info.Side], info.Zip) {
+				t.Errorf("a ZIP Code was reported more than once for side %s of an edge", info.Side)
 			}
-			sides[info.Side] = info.Zip
+			sides[info.Side] = append(sides[info.Side], info.Zip)
 			return nil
 		},
 	)
@@ -84,17 +89,34 @@ func TestBothSidesOfAnEdgeKeepTheirOwnZip(t *testing.T) {
 		t.Fatalf("Error from ustigerline.ReadAddressRanges(): %v", err)
 	}
 
-	twoSided := 0
+	twoSided, multiZip := 0, 0
 	for _, sides := range zips {
-		if sides["L"] != "" && sides["R"] != "" {
+		if len(sides["L"]) > 0 && len(sides["R"]) > 0 {
 			twoSided++
+		}
+		for _, sideZips := range sides {
+			if len(sideZips) > 1 {
+				multiZip++
+			}
 		}
 	}
 	if twoSided == 0 {
-		t.Fatalf(
+		t.Errorf(
 			"no edge in %s reported a ZIP Code on both sides; %d edges were read",
 			fileprefix, len(zips),
 		)
 	}
-	t.Logf("%d of %d edges reported a ZIP Code on both sides", twoSided, len(zips))
+	// A side is described by an address range per run of house numbers, and
+	// the ranges at each end of a street may name different ZIP Codes. Keeping
+	// one ZIP Code per side threw the rest away.
+	if multiZip == 0 {
+		t.Errorf(
+			"no side of any edge in %s reported more than one ZIP Code; %d edges were read",
+			fileprefix, len(zips),
+		)
+	}
+	t.Logf(
+		"%d of %d edges reported a ZIP Code on both sides; %d sides reported more than one ZIP Code",
+		twoSided, len(zips), multiZip,
+	)
 }

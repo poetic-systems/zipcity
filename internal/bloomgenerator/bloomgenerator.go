@@ -119,36 +119,41 @@ func main() {
 				strings.Contains(alts, "Ó ")) {
 				// fmt.Printf("found Zip: %s City: %s Street: %s or: %s\n", side.Zip, cty, street, alts)
 			}
-			if len(cty) > 0 && len(side.Zip) > 4 {
-				key := bloomkeys.KeyZipCity(side.Zip, cty)
-				_, found := zipCityData[key]
-				if !found {
-					zipCityData[key] = ZipCityTuple{
-						Zip:  side.Zip,
-						City: cty,
-					}
-					numZip2City += 1
-				}
-			}
-			if len(side.Zip) > 4 && len(street) > 0 {
-				// NOTE: We store and load bloom filters on a per zip code prefix basis.
-				zipscope := side.Zip[0:2]
-				scoped, exists := zipStreetData[zipscope]
-				if !exists {
-					scoped = make(map[string]ZipStreetTuple, 0)
-				}
-				// make sure we include the primary name as well as the alternative names
-				streetnames := append(side.Street.Alt, street)
-				for _, stname := range streetnames {
-					key := bloomkeys.KeyZipStreet(side.Zip, stname)
-					_, found := scoped[key]
+			// Addresses at each end of a street may be served by different
+			// ZIP Codes, so a side carries every ZIP Code its address ranges
+			// name rather than one.
+			for _, zip := range side.Zips {
+				if len(cty) > 0 && len(zip) > 4 {
+					key := bloomkeys.KeyZipCity(zip, cty)
+					_, found := zipCityData[key]
 					if !found {
-						scoped[key] = ZipStreetTuple{
-							Zip:    side.Zip,
-							Street: stname,
+						zipCityData[key] = ZipCityTuple{
+							Zip:  zip,
+							City: cty,
 						}
-						zipStreetData[zipscope] = scoped
-						numZip2Sreet += 1
+						numZip2City += 1
+					}
+				}
+				if len(zip) > 4 && len(street) > 0 {
+					// NOTE: We store and load bloom filters on a per zip code prefix basis.
+					zipscope := zip[0:2]
+					scoped, exists := zipStreetData[zipscope]
+					if !exists {
+						scoped = make(map[string]ZipStreetTuple, 0)
+					}
+					// make sure we include the primary name as well as the alternative names
+					streetnames := append(side.Street.Alt, street)
+					for _, stname := range streetnames {
+						key := bloomkeys.KeyZipStreet(zip, stname)
+						_, found := scoped[key]
+						if !found {
+							scoped[key] = ZipStreetTuple{
+								Zip:    zip,
+								Street: stname,
+							}
+							zipStreetData[zipscope] = scoped
+							numZip2Sreet += 1
+						}
 					}
 				}
 			}
@@ -168,7 +173,7 @@ func main() {
 					}
 				}
 			}
-			if len(street) > 0 && len(cty) == 0 && len(side.Zip) == 0 {
+			if len(street) > 0 && len(cty) == 0 && len(side.Zips) == 0 {
 				streetOnlyData[street] = side
 				numStreetOnly += 1
 			}
