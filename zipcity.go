@@ -23,7 +23,12 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyZipCity(zip, city)
+
+	key, err := bloomkeys.KeyZipCity(zip, city)
+	if err != nil {
+		return false, err
+	}
+
 	return f.TestString(key), nil
 }
 
@@ -45,7 +50,12 @@ func CheckZipAndStreet(zip, street string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyZipStreet(zip, street)
+
+	key, err := bloomkeys.KeyZipStreet(zip, street)
+	if err != nil {
+		return false, err
+	}
+
 	return f.TestString(key), nil
 }
 
@@ -66,6 +76,11 @@ func CheckCityStateAndStreet(city, state, street string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
-	key := bloomkeys.KeyCityStateStreet(city, state, street)
+
+	key, err := bloomkeys.KeyCityStateStreet(city, state, street)
+	if err != nil {
+		return false, err
+	}
+
 	return f.TestString(key), nil
 }
