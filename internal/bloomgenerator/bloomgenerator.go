@@ -18,6 +18,7 @@ import (
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
 )
 
@@ -82,7 +83,42 @@ func main() {
 		panic(err)
 	}
 
-	numZip2City := uint(0)
+	// TIGER gives a side its city from the PLACEFP of the face beside it,
+	// which is blank outside an incorporated place. The Postal Service
+	// addresses those to the city of the delivering post office instead, so
+	// the city exists but is not in TIGER. GeoNames is where we get it.
+	// See poetic-systems/zipcity#5.
+	geonamespaths, geonamesabsent, err := usgeonames.DownloadUSPostalCodes()
+	if err != nil {
+		panic(err)
+	}
+	for country, err := range geonamesabsent {
+		fmt.Printf("Warning: no GeoNames postal codes for %s: %s\n", country, err)
+	}
+	placesByZip, err := usgeonames.PlacesByPostalCode(geonamespaths)
+	if err != nil {
+		panic(err)
+	}
+
+	// Every ZIP Code GeoNames knows contributes its city directly. TIGER can
+	// only offer a pair where it has both a place and an address range, so
+	// this is the whole of the zip-city relation and TIGER adds to it rather
+	// than the other way round.
+	for zip, places := range placesByZip {
+		for _, place := range places {
+			key := bloomkeys.KeyZipCity(zip, place.PlaceName)
+			_, found := zipCityData[key]
+			if !found {
+				zipCityData[key] = ZipCityTuple{
+					Zip:  zip,
+					City: place.PlaceName,
+				}
+			}
+		}
+	}
+	numGeonamesZip2City := uint(len(zipCityData))
+
+	numZip2City := numGeonamesZip2City
 	numZip2Sreet := uint(0)
 	numCity2Street := uint(0)
 	numStreetOnly := uint(0)
@@ -100,6 +136,23 @@ func main() {
 			cty := ""
 			if side.City != nil {
 				cty = side.City.Name
+			}
+			// A side outside any incorporated place still has a city on an
+			// envelope: the post office that delivers its ZIP Code. Those
+			// cities are the ones the city-street relation is missing, so a
+			// side with no place of its own borrows every city GeoNames
+			// names for its ZIP Codes. It borrows all of them rather than
+			// one, because nothing here can tell which post office serves
+			// which end of the street.
+			postalcities := []string{}
+			if len(cty) > 0 {
+				postalcities = append(postalcities, cty)
+			} else {
+				for _, zip := range side.Zips {
+					for _, place := range placesByZip[zip] {
+						postalcities = append(postalcities, place.PlaceName)
+					}
+				}
 			}
 			street := ""
 			alts := ""
@@ -157,19 +210,21 @@ func main() {
 					}
 				}
 			}
-			if len(cty) > 0 && len(street) > 0 {
+			if len(postalcities) > 0 && len(street) > 0 {
 				// make sure we include the primary name as well as the alternative names
 				streetnames := append(side.Street.Alt, street)
-				for _, stname := range streetnames {
-					key := bloomkeys.KeyCityStateStreet(cty, stateInfo.USPS, stname)
-					_, found := cityStreetData[key]
-					if !found {
-						cityStreetData[key] = CityStreetTuple{
-							City:   cty,
-							State:  stateInfo.USPS,
-							Street: stname,
+				for _, cityname := range postalcities {
+					for _, stname := range streetnames {
+						key := bloomkeys.KeyCityStateStreet(cityname, stateInfo.USPS, stname)
+						_, found := cityStreetData[key]
+						if !found {
+							cityStreetData[key] = CityStreetTuple{
+								City:   cityname,
+								State:  stateInfo.USPS,
+								Street: stname,
+							}
+							numCity2Street += 1
 						}
-						numCity2Street += 1
 					}
 				}
 			}
@@ -179,7 +234,8 @@ func main() {
 			}
 		}
 	}
-	fmt.Printf("Counts - zip-city: %d zip-street: %d city-street: %d street-only: %d\n", numZip2City, numZip2Sreet, numCity2Street, numStreetOnly)
+	fmt.Printf("Counts - zip-city: %d (%d from GeoNames) zip-street: %d city-street: %d street-only: %d\n",
+		numZip2City, numGeonamesZip2City, numZip2Sreet, numCity2Street, numStreetOnly)
 
 	// Initialize Bloom Filters
 	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
