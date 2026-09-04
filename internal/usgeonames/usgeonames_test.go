@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -19,6 +20,11 @@ const usRows = "" +
 
 const prRows = "" +
 	"PR\t00999\tVilla Ejemplo\tVilla Ejemplo\t042\t\t\t\t\t18.0\t-66.0\t4\n"
+
+// American Samoa names no subdivision at all, which is what makes the whole
+// territory the only area its ZIP Code can be attributed to.
+const asRows = "" +
+	"AS\t96999\tExample Village\tAs\t\t\t\t\t\t-14.0\t-170.0\t4\n"
 
 // writeArchive builds a GeoNames-shaped archive: <code>.zip holding
 // <code>.txt, which is how the reader finds the rows.
@@ -123,5 +129,73 @@ func TestAWrongColumnCountIsAnError(t *testing.T) {
 	err := ReadUSPostalPlaces(path, func(*PostalPlace) error { return nil })
 	if err == nil {
 		t.Fatal("read a three column row as though it were the documented twelve")
+	}
+}
+
+func TestTheCountyComesFromWhicheverColumnHoldsIt(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{
+		writeArchive(t, dir, "US", usRows),
+		writeArchive(t, dir, "PR", prRows),
+		writeArchive(t, dir, "AS", asRows),
+	}
+
+	places, err := PlacesByPostalCode(paths)
+	if err != nil {
+		t.Fatalf("PlacesByPostalCode: %s", err)
+	}
+
+	// US.zip holds the state in admin code1 and the county in admin code2;
+	// PR.zip has only the one level and holds the municipio in admin code1;
+	// AS.zip names neither, and a military row names nothing at all.
+	for _, want := range []struct {
+		postalcode string
+		countycode string
+	}{
+		{"10001", "001"},
+		{"10002", ""},
+		{"00999", "042"},
+		{"96999", ""},
+	} {
+		found := places[want.postalcode]
+		if len(found) == 0 {
+			t.Fatalf("no place for %s", want.postalcode)
+		}
+		if found[0].CountyCode != want.countycode {
+			t.Errorf("county code for %s: got %q, want %q", want.postalcode, found[0].CountyCode, want.countycode)
+		}
+	}
+}
+
+func TestAnAreaCollectsEveryZipCodeNamedWithinIt(t *testing.T) {
+	dir := t.TempDir()
+	paths := []string{
+		writeArchive(t, dir, "US", usRows),
+		writeArchive(t, dir, "PR", prRows),
+		writeArchive(t, dir, "AS", asRows),
+	}
+
+	bystate, bycounty, err := PostalCodesByArea(paths)
+	if err != nil {
+		t.Fatalf("PostalCodesByArea: %s", err)
+	}
+
+	// A ZIP Code named twice, once per place name, is one ZIP Code.
+	for area, want := range map[string][]string{"XA": {"10001"}, "AE": {"10002"}, "PR": {"00999"}, "AS": {"96999"}} {
+		if !slices.Equal(bystate[area], want) {
+			t.Errorf("ZIP Codes for state %s: got %v, want %v", area, bystate[area], want)
+		}
+	}
+
+	for area, want := range map[string][]string{"XA001": {"10001"}, "PR042": {"00999"}} {
+		if !slices.Equal(bycounty[area], want) {
+			t.Errorf("ZIP Codes for county %s: got %v, want %v", area, bycounty[area], want)
+		}
+	}
+
+	// American Samoa's ZIP Code belongs to the territory and to no county
+	// within it, which is the whole of what we know about where it applies.
+	if len(bycounty["AS"]) > 0 {
+		t.Errorf("ZIP Codes for a territory with no counties: got %v, want none", bycounty["AS"])
 	}
 }

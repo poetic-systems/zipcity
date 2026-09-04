@@ -99,6 +99,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	stateZips, countyZips, err := usgeonames.PostalCodesByArea(geonamespaths)
+	if err != nil {
+		panic(err)
+	}
 
 	// Every ZIP Code GeoNames knows contributes its city directly. TIGER can
 	// only offer a pair where it has both a place and an address range, so
@@ -130,9 +134,29 @@ func main() {
 		}
 
 		statefips := pre[len(pre)-5 : len(pre)-3]
+		countyfips := pre[len(pre)-3:]
 		stateInfo := stateMap[statefips]
 
+		// Where GeoNames names exactly one ZIP Code for a county equivalent —
+		// or for a territory that has no counties — every address in it carries
+		// that ZIP Code, whether or not TIGER describes an address range for the
+		// side. That is the only thing that says which ZIP Code an American
+		// Samoa street is in: the Census Bureau publishes no address range file
+		// for American Samoa at all, nor for Rota, Tinian or the Northern
+		// Islands, and the file it does publish for Saipan describes 5 of that
+		// island's 6,458 sides. See poetic-systems/zipcity#7.
+		//
+		// A county with more than one ZIP Code lends nothing, because nothing
+		// here says which of them a side without an address range sits in.
+		countyzip := soleAreaZip(stateZips, countyZips, stateInfo.USPS, countyfips)
+
 		for _, side := range allSides {
+			// A side with no ZIP Code of its own borrows the one its county
+			// equivalent has, where the county has one to lend.
+			zips := side.Zips
+			if len(zips) == 0 && len(countyzip) > 0 {
+				zips = []string{countyzip}
+			}
 			cty := ""
 			if side.City != nil {
 				cty = side.City.Name
@@ -148,7 +172,7 @@ func main() {
 			if len(cty) > 0 {
 				postalcities = append(postalcities, cty)
 			} else {
-				for _, zip := range side.Zips {
+				for _, zip := range zips {
 					for _, place := range placesByZip[zip] {
 						postalcities = append(postalcities, place.PlaceName)
 					}
@@ -175,7 +199,7 @@ func main() {
 			// Addresses at each end of a street may be served by different
 			// ZIP Codes, so a side carries every ZIP Code its address ranges
 			// name rather than one.
-			for _, zip := range side.Zips {
+			for _, zip := range zips {
 				if len(cty) > 0 && len(zip) > 4 {
 					key := bloomkeys.KeyZipCity(zip, cty)
 					_, found := zipCityData[key]
@@ -228,7 +252,7 @@ func main() {
 					}
 				}
 			}
-			if len(street) > 0 && len(cty) == 0 && len(side.Zips) == 0 {
+			if len(street) > 0 && len(cty) == 0 && len(zips) == 0 {
 				streetOnlyData[street] = side
 				numStreetOnly += 1
 			}
@@ -437,4 +461,21 @@ func writeAsGob(filename string, data *bloom.BloomFilter) error {
 
 	encoder := gob.NewEncoder(file)
 	return encoder.Encode(data)
+}
+
+// soleAreaZip reports the one ZIP Code GeoNames names for a county equivalent,
+// or the one it names for the whole state or territory where the county has
+// none of its own.
+//
+// An area with more than one ZIP Code reports none: knowing that a street is
+// somewhere in Guam does not say which of Guam's twenty one ZIP Codes serves
+// it, and a wrong ZIP Code in the filters is worse than a missing one.
+func soleAreaZip(stateZips, countyZips map[string][]string, usps, countyfips string) string {
+	for _, zips := range [][]string{countyZips[usps+countyfips], stateZips[usps]} {
+		if len(zips) == 1 {
+			return zips[0]
+		}
+	}
+
+	return ""
 }

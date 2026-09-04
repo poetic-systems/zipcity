@@ -64,12 +64,15 @@ const (
 	colStateName  = 3
 	colStateUSPS  = 4
 	colCountyName = 5
+	colCountyCode = 6
 )
 
 // PostalPlace is one row of the export, reduced to the columns we use.
 //
 // StateUSPS is the two letter code KeyCityStateStreet wants. Where it comes
-// from depends on the file, which is why stateUSPS exists.
+// from depends on the file, which is why stateUSPS exists. CountyCode is the
+// county equivalent's FIPS code, where the row names one at all, and is why
+// countyFIPS exists.
 type PostalPlace struct {
 	Country    string
 	PostalCode string
@@ -77,6 +80,7 @@ type PostalPlace struct {
 	StateName  string
 	StateUSPS  string
 	CountyName string
+	CountyCode string
 }
 
 // stateUSPS reports the USPS state abbreviation for a row.
@@ -93,6 +97,44 @@ func stateUSPS(country, admincode1 string) string {
 	}
 
 	return country
+}
+
+// countyFIPS reports the county equivalent's FIPS code for a row, or "" where
+// the row names none.
+//
+// Which column holds it depends on the file, because GeoNames models every
+// territory as a country and its subdivisions as that country's states. US.zip
+// and the files for Guam and the Virgin Islands put the state in admin code1
+// and the county in admin code2 ("AK" and "013", "66" and "010"). Puerto Rico
+// and the Northern Mariana Islands have only one level and put the municipio
+// or municipality there instead ("001", "110"). American Samoa and Palau name
+// neither.
+//
+// A county equivalent's FIPS code is three digits and none of the state level
+// codes are, so the shape tells them apart and we do not have to keep a table
+// of which file is shaped which way.
+func countyFIPS(admincode1, admincode2 string) string {
+	for _, code := range []string{admincode2, admincode1} {
+		if isCountyFIPS(code) {
+			return code
+		}
+	}
+
+	return ""
+}
+
+func isCountyFIPS(code string) bool {
+	if len(code) != 3 {
+		return false
+	}
+
+	for _, digit := range code {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+
+	return true
 }
 
 // PostalPlaceFunc receives each row in file order. Returning an error stops
@@ -266,6 +308,7 @@ func ReadUSPostalPlaces(archivepath string, placeFn PostalPlaceFunc) error {
 			StateName:  row[colStateName],
 			StateUSPS:  state,
 			CountyName: row[colCountyName],
+			CountyCode: countyFIPS(row[colStateUSPS], row[colCountyCode]),
 		})
 		if err != nil {
 			return err
@@ -299,4 +342,45 @@ func PlacesByPostalCode(archivepaths []string) (map[string][]*PostalPlace, error
 	}
 
 	return places, nil
+}
+
+// PostalCodesByArea reads the archives into the ZIP Codes GeoNames names for
+// each area: bystate is keyed by USPS state abbreviation and bycounty by that
+// abbreviation followed by the county equivalent's FIPS code, as "MP100".
+//
+// An area with exactly one ZIP Code tells a caller something a bloom filter
+// cannot: every address in it carries that ZIP Code. See
+// poetic-systems/zipcity#7, where that is the only thing left that says which
+// ZIP Code an American Samoa street is in.
+func PostalCodesByArea(archivepaths []string) (bystate, bycounty map[string][]string, err error) {
+	bystate = map[string][]string{}
+	bycounty = map[string][]string{}
+
+	add := func(area map[string][]string, key, postalcode string) {
+		if len(key) == 0 || slices.Contains(area[key], postalcode) {
+			return
+		}
+
+		area[key] = append(area[key], postalcode)
+	}
+
+	for _, archivepath := range archivepaths {
+		err := ReadUSPostalPlaces(archivepath, func(place *PostalPlace) error {
+			if len(place.PostalCode) == 0 {
+				return nil
+			}
+
+			add(bystate, place.StateUSPS, place.PostalCode)
+			if len(place.CountyCode) > 0 {
+				add(bycounty, place.StateUSPS+place.CountyCode, place.PostalCode)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return bystate, bycounty, nil
 }
