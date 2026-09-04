@@ -1,7 +1,7 @@
 //go:build ignore
 // +build ignore
 
-// Command build writes the TIGER/Line test fixtures from a local download
+// Command generate writes the TIGER/Line test fixtures from a local download
 // cache.
 //
 // The fixtures are one connected slice of a single county rather than a
@@ -18,7 +18,7 @@
 //
 // Run it from the module root, with the county's files already downloaded:
 //
-//	go run internal/tigerfixture/build/main.go
+//	go run internal/tigerfixture/build/generate.go
 package main
 
 import (
