@@ -8,7 +8,9 @@ import (
 )
 
 func TestReadFeaturesAndEdges(t *testing.T) {
-	fileprefix := "tl_2025_01001"
+	defer ustigerline.UseFixtures()()
+
+	fileprefix := ustigerline.FixturePrefix
 
 	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
 	err := ustigerline.ReadFeaturesAndEdges(
@@ -24,7 +26,9 @@ func TestReadFeaturesAndEdges(t *testing.T) {
 }
 
 func TestReadFacesAndPlaces(t *testing.T) {
-	fileprefix := "tl_2025_01001"
+	defer ustigerline.UseFixtures()()
+
+	fileprefix := ustigerline.FixturePrefix
 
 	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
 	err := ustigerline.ReadFacesAndPlaces(
@@ -40,7 +44,9 @@ func TestReadFacesAndPlaces(t *testing.T) {
 }
 
 func TestReadAddressRanges(t *testing.T) {
-	fileprefix := "tl_2025_01001"
+	defer ustigerline.UseFixtures()()
+
+	fileprefix := ustigerline.FixturePrefix
 
 	fmt.Printf("Reading edges and feature names for %s\n", fileprefix)
 	err := ustigerline.ReadAddressRanges(
