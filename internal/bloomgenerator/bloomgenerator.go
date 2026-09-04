@@ -148,7 +148,20 @@ func main() {
 		//
 		// A county with more than one ZIP Code lends nothing, because nothing
 		// here says which of them a side without an address range sits in.
+		//
+		// The address ranges get a veto. Where a county's own ranges name a
+		// ZIP Code that is not the one GeoNames gives it, GeoNames is telling
+		// us less than the whole truth about that county and we take none of
+		// it. That leaves the rule firing on the areas it was written for
+		// without having to know in advance which ones those are, and it is
+		// not a formality: GeoNames names one ZIP Code for most Puerto Rico
+		// municipios, and the ranges show many. 119 of the 141 areas GeoNames
+		// gives a single ZIP Code are vetoed this way.
 		countyzip := soleAreaZip(stateZips, countyZips, stateInfo.USPS, countyfips)
+		if len(countyzip) > 0 && contradictedBySides(allSides, countyzip) {
+			fmt.Printf("Note: address ranges in %s name a ZIP Code other than %s, so it is not lent\n", pre, countyzip)
+			countyzip = ""
+		}
 
 		for _, side := range allSides {
 			// A side with no ZIP Code of its own borrows the one its county
@@ -470,6 +483,21 @@ func writeAsGob(filename string, data *bloom.BloomFilter) error {
 // An area with more than one ZIP Code reports none: knowing that a street is
 // somewhere in Guam does not say which of Guam's twenty one ZIP Codes serves
 // it, and a wrong ZIP Code in the filters is worse than a missing one.
+// contradictedBySides reports whether any address range in the county names a
+// ZIP Code other than the one given, which means the area has more ZIP Codes
+// than GeoNames names for it and none of them can be lent.
+func contradictedBySides(sides map[string]*ustigerline.StreetSide, countyzip string) bool {
+	for _, side := range sides {
+		for _, zip := range side.Zips {
+			if zip != countyzip {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func soleAreaZip(stateZips, countyZips map[string][]string, usps, countyfips string) string {
 	for _, zips := range [][]string{countyZips[usps+countyfips], stateZips[usps]} {
 		if len(zips) == 1 {
