@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 // Command build writes the TIGER/Line test fixtures from a local download
 // cache.
 //
@@ -7,7 +10,7 @@
 // built outward from the faces that belong to a place, because a face with no
 // place names no city and the city path is the one worth exercising.
 //
-//	faces  -> the first placeCount places, and up to faceCount of their faces
+//	faces  -> the first placeCount places, and every face that belongs to them
 //	edges  -> every edge bounded by one of those faces, giving the TLIDs
 //	featnames, addr -> every record for one of those TLIDs
 //	place  -> the places the kept faces name
@@ -15,7 +18,7 @@
 //
 // Run it from the module root, with the county's files already downloaded:
 //
-//	go run ./internal/tigerfixture/build
+//	go run internal/tigerfixture/build/main.go
 package main
 
 import (
