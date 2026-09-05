@@ -54,8 +54,15 @@ func TestAbsentSourcesAgainstTheLiveIndex(t *testing.T) {
 			t.Errorf("%s: the index listed no files at all", filetype)
 		}
 	}
-	if counties := idx.counts["county"]; len(counties) < 3000 {
+	counties := idx.countyPrefixes()
+	if len(counties) < 3000 {
 		t.Errorf("the index listed %d county equivalents, want the ~3,200 the release has", len(counties))
+	}
+	// The prefix is read off the file names rather than written down, so a
+	// release that renamed its files would otherwise send the readers looking
+	// for archives under a name nothing is stored as.
+	if want := "tl_2025_01001"; counties[0] != want {
+		t.Errorf("first county prefix = %q, want %q", counties[0], want)
 	}
 	t.Logf("file types read: %v", slices.Sorted(maps.Keys(idx.areasByType)))
 }
