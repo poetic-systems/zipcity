@@ -99,3 +99,61 @@ func areaOf(basename, suffix string) string {
 
 	return parts[len(parts)-1]
 }
+
+// countyShape is the shape of a county-equivalent area code: a five digit
+// FIPS code. The county files are the ones a generation reads area by area.
+const countyShape = "5"
+
+// countyPrefixes names the basename every one of a county equivalent's files
+// starts with — tl_2025_01001 — for each county equivalent the index lists a
+// file for. A reader appends the file type to it.
+//
+// The counties are read off areasByType, the same map an absence is: the two
+// cannot disagree about which counties the release has.
+func (idx *tigerfileIndex) countyPrefixes() []string {
+	seen := make(map[string]bool)
+	for _, areas := range idx.areasByType {
+		for area := range areas {
+			if shapeOf(area) == countyShape {
+				seen[area] = true
+			}
+		}
+	}
+
+	prefixes := make([]string, 0, len(seen))
+	for area := range seen {
+		prefixes = append(prefixes, idx.release+"_"+area)
+	}
+	slices.Sort(prefixes)
+
+	return prefixes
+}
+
+// unexpected reports the absences policy does not allow, as "area: filetype"
+// pairs in sorted order. optional names the file types the Census Bureau is
+// not expected to publish for every area at their granularity.
+func (a AbsentSources) unexpected(optional map[string]bool) []string {
+	pairs := make([]string, 0)
+	for area, filetypes := range a {
+		for _, filetype := range filetypes {
+			if !optional[filetype] {
+				pairs = append(pairs, area+": "+filetype)
+			}
+		}
+	}
+	slices.Sort(pairs)
+
+	return pairs
+}
+
+// optionalTypes names the file types a caller marked MayBeAbsent.
+func optionalTypes(required []RequiredTigerfiles) map[string]bool {
+	optional := make(map[string]bool)
+	for _, req := range required {
+		if req.MayBeAbsent {
+			optional[strings.TrimPrefix(req.Suffix, "_")] = true
+		}
+	}
+
+	return optional
+}
