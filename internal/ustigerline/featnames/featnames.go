@@ -16,7 +16,8 @@ import (
 	"maps"
 	"strings"
 
-	table "github.com/poetic-systems/addresstables/ustigerfile/featuretypes"
+	"github.com/poetic-systems/addresstables/streetsuffixes"
+	"github.com/poetic-systems/addresstables/ustigerfile/featuretypes"
 	"github.com/poetic-systems/zipcity/internal/ustigerline/directionals"
 	"github.com/poetic-systems/zipcity/internal/ustigerline/fieldutil"
 	"github.com/poetic-systems/zipcity/internal/ustigerline/qualifiers"
@@ -24,17 +25,27 @@ import (
 
 // FeatnameInfo is one Appendix D row. Rows are uppercase, as the whole of
 // addresstables is; the published table prints them in title case.
-type FeatnameInfo = table.FeatureType
+type FeatnameInfo = featuretypes.FeatureType
 
 var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
-	for f := range table.All() {
+	for f := range featuretypes.All() {
 		if !yield(f.Code, f) {
 			return
 		}
 	}
 })
 
-func ExpandFeatureName(attr map[string]any) string {
+var pub28StreeSuffixes = maps.Collect(func(yield func(string, string) bool) {
+	for s := range streetsuffixes.All() {
+		for _, a := range s.Alt {
+			if !yield(a, s.Short) {
+				return
+			}
+		}
+	}
+})
+
+func Pub28FeatureName(attr map[string]any) string {
 	isSpanish := false
 
 	base := ""
@@ -43,6 +54,7 @@ func ExpandFeatureName(attr map[string]any) string {
 	if ok {
 		base = fieldutil.AsString(rawname)
 	}
+	base = strings.ToUpper(base)
 
 	prefixqualifier := ""
 	// attr['PREQUAL'] will contain a numeric code for qualifiers
@@ -93,7 +105,14 @@ func ExpandFeatureName(attr map[string]any) string {
 		if suffixInfo.Spanish {
 			isSpanish = true
 		}
-		suffixtype = suffixInfo.Full
+
+		// only abbreviate know pub28 suffixes
+		p28, ok := pub28StreeSuffixes[suffixInfo.Full]
+		if ok {
+			suffixtype = p28
+		} else {
+			suffixtype = suffixInfo.Full
+		}
 	}
 
 	// handle directionals
@@ -105,7 +124,7 @@ func ExpandFeatureName(attr map[string]any) string {
 		pdir := fieldutil.AsString(rawpdir)
 		if len(pdir) > 0 {
 			pd := directionals.Expand(pdir, isSpanish)
-			prefixdirectional = pd
+			prefixdirectional = directionals.Pub28(pd)
 		}
 	}
 
@@ -115,12 +134,8 @@ func ExpandFeatureName(attr map[string]any) string {
 	if ok {
 		sdir := fieldutil.AsString(rawsdir)
 		if len(sdir) > 0 {
-			// FIXME: Exactly what we do with directionals is TBD.
-			// See https://github.com/poetic-systems/zipcity/issues/4.
-			// Expanding, abbreviating, and aliasing (duplicating without the directional)
-			// all have significant concerns.
 			sd := directionals.Expand(sdir, isSpanish)
-			suffixdirectional = sd
+			suffixdirectional = directionals.Pub28(sd)
 		}
 	}
 
@@ -135,8 +150,6 @@ func ExpandFeatureName(attr map[string]any) string {
 	// as literal strings in annual TIGER/Line roll-forwards.
 	base, _ = strings.CutPrefix(base, "Ó ")
 
-	// TODO: determine if we need to uppercase and remove diacritics preemptively
-
 	// The full concatenation order in TIGER files is:
 	//   Prefix Qualifier (e.g., Old, New)
 	//   Prefix Directional (e.g., North, East)
@@ -146,7 +159,7 @@ func ExpandFeatureName(attr map[string]any) string {
 	//   Suffix Directional
 	//   Suffix Qualifier
 
-	return strings.Join([]string{
+	return fieldutil.JoinNonEmpty([]string{
 		prefixqualifier,
 		prefixdirectional,
 		prefixtype,
