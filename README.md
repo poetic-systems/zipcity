@@ -140,6 +140,49 @@ are embedded via `go:embed` during the build process so they are both stored and
 distributed as efficiently as possible and readily available for use by the
 library immediately.
 
+## Building the Data
+
+Both of the data-producing steps in this repository are Go programs carrying
+`//go:build ignore`, so they never enter the build graph of the released library
+and are run explicitly:
+
+```sh
+go run internal/bloomgenerator/bloomgenerator.go
+go run internal/tigerfixture/build/generate.go
+```
+
+Run them from the module root. Neither is needed to build or use the library —
+the compiled filters and the test fixtures are both committed.
+
+### The bloom filters
+
+`internal/bloomgenerator/bloomgenerator.go` downloads what it needs and writes
+`generated/compiled_filter/`, which the library embeds.
+
+- **Inputs**, cached on disk and re-used across runs: the Census Bureau TIGER
+  files under `./data/us_census_tiger/`, and the GeoNames postal code exports
+  under `./data/geonames/`. The first run fetches several gigabytes of TIGER
+  files; later runs only fetch what is missing.
+- **A required file that will not load stops the run.** Every file the Census
+  Bureau's own index lists must be present and readable, and an archive holding
+  no files counts as unreadable — a request is sometimes answered with a 200 and
+  an HTML error page, which would otherwise read as a county with no records.
+  Unreadable cached files are deleted so the next run fetches them again, and
+  all the failures are reported together. A file the Census Bureau does not
+  publish never reaches that list, so it is not a failure.
+
+### The test fixtures
+
+`internal/tigerfixture/build/generate.go` writes the TIGER slice under
+`internal/ustigerline/testdata/us_census_tiger/` that `ustigerline`'s tests
+read. It builds one connected slice of a single county — faces, then the edges
+they bound, then the names and address ranges for those edges — because the
+readers exist to follow the joins between the files, and a fixture that breaks
+a join tests nothing.
+
+It reads from the same `./data/us_census_tiger/` cache and downloads nothing, so
+the county's files have to be there already.
+
 ## Current Known Issues
 
 Because the current version of this library is built from the US Census Bureau's
