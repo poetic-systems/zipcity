@@ -129,3 +129,64 @@ func TestCheckCityStateAndStreet(t *testing.T) {
 		}
 	}
 }
+
+// Puerto Rico street names put the type at the front, and TIGER spells that
+// type its own way — CLL for CALLE. Project US@ page 26 forbids abbreviating a
+// street name, so a conforming caller sends the form on the left and the data
+// holds the form on the right. Before the leading type was aliased, every one
+// of these returned a definitive false for a street that is in the data.
+//
+// These are street names only, with no premise number attached. None of them
+// identifies a residence.
+func TestSpecFormPuertoRicoStreetNamesAreFound(t *testing.T) {
+	for _, tc := range []struct {
+		city, state, street string
+	}{
+		{"SAN JUAN", "PR", "CALLE LOIZA"},
+		{"SAN JUAN", "PR", "CALLE ASHFORD"},
+		{"SAN JUAN", "PR", "CALLE DE LA FORTALEZA"},
+		{"SAN JUAN", "PR", "CALLE SAN FRANCISCO"},
+		{"SAN JUAN", "PR", "AVENIDA ASHFORD"},
+	} {
+		found, err := zipcity.CheckCityStateAndStreet(tc.city, tc.state, tc.street)
+		if err != nil {
+			t.Fatalf("Error checking city: '%s' state: '%s' and street: '%s': %s", tc.city, tc.state, tc.street, err)
+		}
+		if !found {
+			t.Errorf("Expected city: '%s' state: '%s' and street: '%s' to be found", tc.city, tc.state, tc.street)
+		}
+	}
+}
+
+// The spelling TIGER actually holds has to keep working. Aliasing adds
+// spellings; it must not replace the one that was already right.
+func TestTigerFormPuertoRicoStreetNamesStillWork(t *testing.T) {
+	for _, street := range []string{"CLL LOIZA", "CLL ASHFORD", "CLL SAN FRANCISCO", "AVE ASHFORD"} {
+		found, err := zipcity.CheckCityStateAndStreet("SAN JUAN", "PR", street)
+		if err != nil {
+			t.Fatalf("Error checking street '%s': %s", street, err)
+		}
+		if !found {
+			t.Errorf("Expected street '%s' to still be found", street)
+		}
+	}
+}
+
+// An invented street name must not be found. Aliasing multiplies the number of
+// filter probes, so this is the guard that the extra probes have not turned the
+// filter into something that answers true for everything.
+func TestAliasingDoesNotFindInventedStreets(t *testing.T) {
+	for _, street := range []string{
+		"CALLE ZZQXVW NONEXISTENT",
+		"CLL ZZQXVW NONEXISTENT",
+		"AVENIDA ZZQXVW NONEXISTENT",
+	} {
+		found, err := zipcity.CheckCityStateAndStreet("SAN JUAN", "PR", street)
+		if err != nil {
+			t.Fatalf("Error checking street '%s': %s", street, err)
+		}
+		if found {
+			t.Errorf("Expected invented street '%s' not to be found", street)
+		}
+	}
+}

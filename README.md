@@ -199,3 +199,17 @@ two known primary causes:
    - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_42065_faces.zip>
      Additionally, there are no address range files for the Marshal Islands and
      the Northern Marianas Islands.
+2. TIGER spells a street name in its own vocabulary, which is neither the
+   caller's nor the standard's. Puerto Rico street names carry their type at the
+   front, and TIGER abbreviates some of those types and not others — `CLL` for
+   Calle, `CAM` for Camino, `QBDA` for Quebrada, while writing `EXPRESO`,
+   `AUTOPISTA` and `CALLEJÓN` out in full, diacritics included. Project US@ page
+   26 forbids abbreviating a street name, so a conforming caller sends `CALLE`
+   and the data holds `CLL`.
+
+   The leading type is now aliased at lookup time, so both spellings find the
+   street. The rest of the name is not aliased: `CLL LOIZA` and `CLL LOÍZA` are
+   separate TIGER records and therefore separate keys, and nothing derives one
+   from the other. Folding diacritics in the name half needs the filters rebuilt
+   with folded keys — see
+   [#1](https://github.com/poetic-systems/zipcity/issues/1).
