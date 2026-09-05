@@ -9,9 +9,11 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -71,7 +73,7 @@ func main() {
 	streetOnlyData := map[string]*ustigerline.StreetSide{}
 
 	// Cache the census data locally if we don't already have it
-	prefixes, err := ustigerline.DownloadAllRequiredTigerfiles()
+	prefixes, absent, err := ustigerline.DownloadAllRequiredTigerfiles()
 	if err != nil {
 		panic(err)
 	}
@@ -357,6 +359,20 @@ import (
 
 var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
 
+// AbsentSources names, per TIGER area code, the source file types the Census
+// Bureau published nothing of at generation time. Read off the Census Bureau's
+// own index each generation rather than from a list kept here.
+//
+// A file the index does list must load or generation stops, so these are the
+// only gaps in what the filters were built from. An area named here is one the
+// filters know less about than the rest; absence from the filters is weaker
+// evidence there than elsewhere. See poetic-systems/zipcity#2.
+var AbsentSources = map[string][]string{
+{{- range .Absent }}
+	"{{ .Area }}": { {{- range $i, $t := .Types }}{{ if $i }}, {{ end }}"{{ $t }}"{{ end -}} },
+{{- end }}
+}
+
 type CompiledFilter string
 
 const (
@@ -436,13 +452,34 @@ var RawCityStreetFilterBytes []byte
 	defer outFile.Close()
 
 	err = t.Execute(outFile, map[string]interface{}{
-		"Files": zipstreetfiles,
-		"Now":   now.UTC().Format(time.RFC3339),
+		"Files":  zipstreetfiles,
+		"Absent": absentRows(absent),
+		"Now":    now.UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("Successfully generated %s\n", outFile.Name())
+}
+
+// absentRows puts the absent-source report in a fixed order, so that two
+// generations over the same index write the same bytes.
+func absentRows(absent ustigerline.AbsentSources) []struct {
+	Area  string
+	Types []string
+} {
+	rows := make([]struct {
+		Area  string
+		Types []string
+	}, 0, len(absent))
+	for _, area := range slices.Sorted(maps.Keys(absent)) {
+		rows = append(rows, struct {
+			Area  string
+			Types []string
+		}{Area: area, Types: absent[area]})
+	}
+
+	return rows
 }
 
 func writeAsGob(filename string, data *bloom.BloomFilter) error {

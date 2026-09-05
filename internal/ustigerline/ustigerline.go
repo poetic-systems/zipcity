@@ -469,39 +469,67 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 	return nil
 }
 
-func DownloadAllRequiredTigerfiles() ([]string, error) {
-	return DownloadRequiredTigerfiles([]RequiredTigerfiles{
+func DownloadAllRequiredTigerfiles() ([]string, AbsentSources, error) {
+	return DownloadRequiredTigerfiles(allRequiredTigerfiles())
+}
+
+// allRequiredTigerfiles is every set of TIGER files a generation reads, and
+// the granularity each is published at.
+func allRequiredTigerfiles() []RequiredTigerfiles {
+	return []RequiredTigerfiles{
 		{ftpbase, featureFTPPath, "_featnames", "county"},
 		{ftpbase, edgeFTPPath, "_edges", "county"},
 		{ftpbase, addrFTPPath, "_addr", "addr"},
 		{ftpbase, facesFTPPath, "_faces", "county"},
 		{ftpbase, placeFTPPath, "_place", "state"},
 		{ftpbase, stateFTPPath, "_state", "us"},
-	})
+	}
 }
 
-func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error) {
-	counts := make(map[string]map[string]int, 0)
-	setSizes := make(map[string]int, 0)
-	allfiles := make([]*url.URL, 0)
+// tigerfileIndex is what the Census Bureau's own FTP indexes say it publishes:
+// every file listed, how many of each set's file types each area has, and
+// which areas each file type covers.
+type tigerfileIndex struct {
+	files       []*url.URL
+	counts      map[string]map[string]int
+	setSizes    map[string]int
+	areasByType map[string]map[string]bool
+}
+
+// readTigerfileIndexes reads the indexes and nothing else. Downloading the
+// archives is the caller's business, which is what lets a test ask what the
+// Census Bureau publishes today without fetching the whole release.
+func readTigerfileIndexes(required []RequiredTigerfiles) (*tigerfileIndex, error) {
+	idx := &tigerfileIndex{
+		files:       make([]*url.URL, 0),
+		counts:      make(map[string]map[string]int, 0),
+		setSizes:    make(map[string]int, 0),
+		areasByType: make(map[string]map[string]bool, len(required)),
+	}
 	for _, req := range required {
-		source := req.Source
-		setSizes[req.Set] += 1
-		cnt, ok := counts[req.Set]
+		idx.setSizes[req.Set] += 1
+		cnt, ok := idx.counts[req.Set]
 		if !ok {
 			cnt = make(map[string]int, 0)
-			counts[req.Set] = cnt
+			idx.counts[req.Set] = cnt
 		}
 
-		sourceindex := source.JoinPath(req.Path)
-		sourcefiles, err := downloadFtpIndex(sourceindex)
+		filetype := strings.TrimPrefix(req.Suffix, "_")
+		areas, ok := idx.areasByType[filetype]
+		if !ok {
+			areas = make(map[string]bool, 0)
+			idx.areasByType[filetype] = areas
+		}
+
+		sourcefiles, err := downloadFtpIndex(req.Source.JoinPath(req.Path))
 		if err != nil {
 			return nil, err
 		}
-		allfiles = append(allfiles, sourcefiles...)
+		idx.files = append(idx.files, sourcefiles...)
 
 		for _, v := range sourcefiles {
-			b := path.Base(v.String())
+			b := strings.TrimSuffix(path.Base(v.String()), ".zip")
+			areas[areaOf(b, req.Suffix)] = true
 			end := strings.LastIndex(b, "_")
 			if end > 0 {
 				b = b[0:end]
@@ -509,6 +537,16 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error)
 			cnt[b] += 1
 		}
 	}
+
+	return idx, nil
+}
+
+func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, AbsentSources, error) {
+	idx, err := readTigerfileIndexes(required)
+	if err != nil {
+		return nil, nil, err
+	}
+	counts, setSizes, allfiles := idx.counts, idx.setSizes, idx.files
 
 	mismatched := slices.Collect(func(yield func(string) bool) {
 		for setkey, set := range counts {
@@ -524,19 +562,19 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error)
 	if len(mismatched) > 0 {
 		formatted, err := json.MarshalIndent(mismatched, "", "  ")
 		if err != nil {
-			return nil, fmt.Errorf("Mismatched required TIGER file names; error generating report: %w", err)
+			return nil, nil, fmt.Errorf("Mismatched required TIGER file names; error generating report: %w", err)
 		}
-		return nil, fmt.Errorf("Mismatched required TIGER file names; report: %s, %v, %v, %d, %d", formatted, setSizes, counts, len(counts["county"]), len(mismatched))
+		return nil, nil, fmt.Errorf("Mismatched required TIGER file names; report: %s, %v, %v, %d, %d", formatted, setSizes, counts, len(counts["county"]), len(mismatched))
 	}
 
-	err := os.MkdirAll(storagedir, 0755)
+	err = os.MkdirAll(storagedir, 0755)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dir, err := os.Open(storagedir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer dir.Close()
 
@@ -558,7 +596,7 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error)
 	for _, v := range allfiles {
 		localpath, err := localTigerfilePath(v, dir)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if urlErr, hasError := errorURLs[v]; hasError {
 			failures = append(failures, fmt.Sprintf("%s: %s", v, urlErr))
@@ -574,13 +612,13 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error)
 	}
 	if len(failures) > 0 {
 		slices.Sort(failures)
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%d of %d required TIGER files could not be loaded (removed any that were unreadable; re-run to download them again):\n  %s",
 			len(failures), len(allfiles), strings.Join(failures, "\n  "),
 		)
 	}
 
-	return slices.Collect(maps.Keys(counts["county"])), nil
+	return slices.Collect(maps.Keys(counts["county"])), absentSources(idx.areasByType), nil
 }
 
 func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
