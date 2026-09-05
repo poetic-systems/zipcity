@@ -15,6 +15,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poetic-systems/addresstables v0.0.0-20260905050528-50a8eb29a4b0 h1:kQN7FepnndVPfz9Ka1hywGmqMVQetCUp7wfQ6g3uijM=
 github.com/poetic-systems/addresstables v0.0.0-20260905050528-50a8eb29a4b0/go.mod h1:0+0MslI2VD30//JsNgvjPLz04GiV6YEsFE2pni512Fs=
+github.com/poetic-systems/addresstables v0.0.0-20260905190649-4161ec4b8528 h1:N/TVFlCUKXfSsrBo3yUnCNRrP25B3iOP3yhyUTiTCok=
+github.com/poetic-systems/addresstables v0.0.0-20260905190649-4161ec4b8528/go.mod h1:0+0MslI2VD30//JsNgvjPLz04GiV6YEsFE2pni512Fs=
 github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKsk=
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/twmb/murmur3 v1.1.8 h1:8Yt9taO/WN3l08xErzjeschgZU2QSrwm1kclYq+0aRg=
