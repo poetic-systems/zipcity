@@ -113,7 +113,10 @@ func main() {
 	// than the other way round.
 	for zip, places := range placesByZip {
 		for _, place := range places {
-			key := bloomkeys.KeyZipCity(zip, place.PlaceName)
+			key, err := bloomkeys.KeyZipCity(zip, place.PlaceName)
+			if err != nil {
+				panic(err)
+			}
 			_, found := zipCityData[key]
 			if !found {
 				zipCityData[key] = ZipCityTuple{
@@ -202,7 +205,10 @@ func main() {
 			// name rather than one.
 			for _, zip := range zips {
 				if len(cty) > 0 && len(zip) > 4 {
-					key := bloomkeys.KeyZipCity(zip, cty)
+					key, err := bloomkeys.KeyZipCity(zip, cty)
+					if err != nil {
+						panic(err)
+					}
 					_, found := zipCityData[key]
 					if !found {
 						zipCityData[key] = ZipCityTuple{
@@ -222,7 +228,10 @@ func main() {
 					// make sure we include the primary name as well as the alternative names
 					streetnames := append(side.Street.Alt, street)
 					for _, stname := range streetnames {
-						key := bloomkeys.KeyZipStreet(zip, stname)
+						key, err := bloomkeys.KeyZipStreet(zip, stname)
+						if err != nil {
+							panic(err)
+						}
 						_, found := scoped[key]
 						if !found {
 							scoped[key] = ZipStreetTuple{
@@ -240,7 +249,10 @@ func main() {
 				streetnames := append(side.Street.Alt, street)
 				for _, cityname := range postalcities {
 					for _, stname := range streetnames {
-						key := bloomkeys.KeyCityStateStreet(cityname, stateInfo.USPS, stname)
+						key, err := bloomkeys.KeyCityStateStreet(cityname, stateInfo.USPS, stname)
+						if err != nil {
+							panic(err)
+						}
 						_, found := cityStreetData[key]
 						if !found {
 							cityStreetData[key] = CityStreetTuple{

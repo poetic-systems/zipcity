@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/poetic-systems/zipcity/internal/ustigerline/featnames"
+	"github.com/poetic-systems/zipcity/internal/ustigerline/fieldutil"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-shapefile"
 )
@@ -137,9 +139,9 @@ func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
 
 	stateMap := make(map[string]*StateInfo)
 	for usst := range usstates.Records() {
-		stfips := asString(usst["STATEFP"])
-		stname := asString(usst["NAME"])
-		stusps := asString(usst["STUSPS"])
+		stfips := fieldutil.AsString(usst["STATEFP"])
+		stname := fieldutil.AsString(usst["NAME"])
+		stusps := fieldutil.AsString(usst["STUSPS"])
 
 		if len(stfips) > 0 {
 			// fmt.Printf("State: %s USPS: %s StateFP: %s\n", stname, stusps, stfips)
@@ -167,7 +169,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 	err := ReadFeaturesAndEdges(fileprefix, func(
 		stInfo *StreetInfo,
 	) error {
-		rTfid := asString(stInfo.Attributes["TFIDR"])
+		rTfid := fieldutil.AsString(stInfo.Attributes["TFIDR"])
 		if len(rTfid) > 0 {
 			side := &StreetSide{
 				TLID:   stInfo.TLID,
@@ -184,7 +186,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 			tfidMap[rTfid] = tlidkeys
 		}
 
-		lTfid := asString(stInfo.Attributes["TFIDL"])
+		lTfid := fieldutil.AsString(stInfo.Attributes["TFIDL"])
 		if len(lTfid) > 0 {
 			side := &StreetSide{
 				TLID:   stInfo.TLID,
@@ -284,9 +286,9 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 		if !found {
 			continue
 		}
-		tlid := asString(rawTLID)
-		arSide := strings.ToUpper(asString(ar["SIDE"]))
-		arZip := asString(ar["ZIP"])
+		tlid := fieldutil.AsString(rawTLID)
+		arSide := strings.ToUpper(fieldutil.AsString(ar["SIDE"]))
+		arZip := fieldutil.AsString(ar["ZIP"])
 		if arZip == "<nil>" {
 			// The documentation above notes that a few address ranges carry no
 			// ZIP Code at all. Report that as the absence it is.
@@ -330,9 +332,9 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			fmt.Printf("No TFID found in %s\n", out)
 			continue
 		}
-		tfid := asString(rawTFID)
+		tfid := fieldutil.AsString(rawTFID)
 		rawPlaceFP, _ := facefields["PLACEFP"]
-		placefp := asString(rawPlaceFP)
+		placefp := fieldutil.AsString(rawPlaceFP)
 
 		// fmt.Printf("TFID: '%s' PLACEFP: '%s'\n", tfid, placefp)
 
@@ -367,7 +369,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			// fmt.Printf("No PLACEFP found in %s\n", out)
 			continue
 		}
-		placeFP := asString(rawPlaceFP)
+		placeFP := fieldutil.AsString(rawPlaceFP)
 		ctyInfo, found := placefpMap[placeFP]
 		if !found {
 			// fmt.Printf("No city info found for '%s'\n", placeFP)
@@ -394,7 +396,7 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 
 	featnameIndex := make(map[string]*StreetInfo)
 
-	featnames, err := shapefile.ReadZipFile(featnamesDbfPath, nil)
+	features, err := shapefile.ReadZipFile(featnamesDbfPath, nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "not a valid zip file") {
 			os.Remove(featnamesDbfPath)
@@ -402,7 +404,7 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		return err
 	}
 
-	for fields := range featnames.Records() {
+	for fields := range features.Records() {
 		// TLID is the TIGER/Line ID. It is used to link the feature from the
 		// featnames.zip to the edge from edges.zip. It is type int.
 		// A featurename record should exist for every possible name of an edge.
@@ -410,12 +412,8 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		if !found {
 			continue
 		}
-		tlid := asString(rawTLID)
-		rawFullname, found := fields["FULLNAME"]
-		if !found {
-			continue
-		}
-		fullname := strings.ToUpper(asString(rawFullname))
+		tlid := fieldutil.AsString(rawTLID)
+		fullname := strings.ToUpper(featnames.Pub28FeatureName(fields))
 
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature
@@ -447,14 +445,14 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		if !found {
 			continue
 		}
-		edgeTLID := asString(rawTLID)
+		edgeTLID := fieldutil.AsString(rawTLID)
 		stInfo, found := featnameIndex[edgeTLID]
 		if !found {
 			continue
 		}
 		rawFullname, found := attributes["FULLNAME"]
 		if found {
-			fullname := strings.ToUpper(asString(rawFullname))
+			fullname := strings.ToUpper(fieldutil.AsString(rawFullname))
 			stInfo.Name = fullname
 		}
 
@@ -740,21 +738,4 @@ func verifyTigerfileZip(localpath string) error {
 		return fmt.Errorf("archive holds no files")
 	}
 	return nil
-}
-
-func asString(input interface{}) string {
-	s, ok := input.(string)
-	if ok {
-		// fmt.Printf("Formatting %v as string\n", input)
-		return fmt.Sprintf("%s", s)
-	}
-
-	d, ok := input.(int)
-	if ok {
-		// fmt.Printf("Formatting %v as int\n", input)
-		return fmt.Sprintf("%d", d)
-	}
-
-	// fmt.Printf("Formatting %v using Sprintf(v)\n", input)
-	return fmt.Sprintf("%v", input)
 }

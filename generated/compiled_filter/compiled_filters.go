@@ -1,4 +1,4 @@
-// DO NOT EDIT! Code generated at 2026-08-29T18:28:22Z by internal/bloomgenerator/bloomgenerator.go
+// DO NOT EDIT! Code generated at 2026-09-05T21:38:43Z by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
 import (
@@ -11,6 +11,25 @@ import (
 )
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
+
+// AbsentSources names, per TIGER area code, the source file types the Census
+// Bureau published nothing of at generation time. Read off the Census Bureau's
+// own index each generation rather than from a list kept here.
+//
+// A file the index does list must load or generation stops, so these are the
+// only gaps in what the filters were built from. An area named here is one the
+// filters know less about than the rest; absence from the filters is weaker
+// evidence there than elsewhere. See poetic-systems/zipcity#2.
+var AbsentSources = map[string][]string{
+	"60010": {"addr"},
+	"60020": {"addr"},
+	"60030": {"addr"},
+	"60040": {"addr"},
+	"60050": {"addr"},
+	"69085": {"addr"},
+	"69100": {"addr"},
+	"69120": {"addr"},
+}
 
 type CompiledFilter string
 
