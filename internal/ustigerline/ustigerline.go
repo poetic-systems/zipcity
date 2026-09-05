@@ -548,21 +548,36 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, error)
 		}
 	}
 
-	// make sure all expected files exist
+	// Every file the index listed must be here and must be readable. A file
+	// the Census Bureau does not publish never reaches this list, so anything
+	// missing or corrupt now is a failure to load data we have, not a gap in
+	// what is published. Generating past it would bake that gap into the
+	// filters, where an absent key is indistinguishable from a known-absent
+	// one. See poetic-systems/zipcity#2.
+	failures := make([]string, 0)
 	for _, v := range allfiles {
-		urlErr, hasError := errorURLs[v]
-		if hasError {
-			fmt.Printf("%s error: %s\n", v, urlErr)
-			continue
-		}
 		localpath, err := localTigerfilePath(v, dir)
 		if err != nil {
 			return nil, err
 		}
-		_, err = os.Stat(localpath)
-		if err != nil || errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("%s may not exist: %w", localpath, err)
+		if urlErr, hasError := errorURLs[v]; hasError {
+			failures = append(failures, fmt.Sprintf("%s: %s", v, urlErr))
+			continue
 		}
+		err = verifyTigerfileZip(localpath)
+		if err != nil {
+			// Drop it so the next run downloads it again, the same way a
+			// download that arrives corrupt is dropped.
+			os.Remove(localpath)
+			failures = append(failures, fmt.Sprintf("%s: %s", localpath, err))
+		}
+	}
+	if len(failures) > 0 {
+		slices.Sort(failures)
+		return nil, fmt.Errorf(
+			"%d of %d required TIGER files could not be loaded (removed any that were unreadable; re-run to download them again):\n  %s",
+			len(failures), len(allfiles), strings.Join(failures, "\n  "),
+		)
 	}
 
 	return slices.Collect(maps.Keys(counts["county"])), nil
@@ -670,6 +685,23 @@ func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
 	defer reader.Close()
 
 	return err
+}
+
+// verifyTigerfileZip reports whether a cached archive is one we can read. An
+// empty archive is treated as unreadable: the Census Bureau sometimes answers a
+// file request with a 200 and an error page, and a run that reads it as zero
+// records looks exactly like a county with nothing in it.
+func verifyTigerfileZip(localpath string) error {
+	reader, err := zip.OpenReader(localpath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	if len(reader.File) == 0 {
+		return fmt.Errorf("archive holds no files")
+	}
+	return nil
 }
 
 func asString(input interface{}) string {

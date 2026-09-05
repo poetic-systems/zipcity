@@ -17,3 +17,6 @@ func UseFixtures() func() {
 	storagedir = filepath.Join("testdata", "us_census_tiger")
 	return func() { storagedir = previous }
 }
+
+// VerifyTigerfileZip exposes the cached-archive check to the tests.
+var VerifyTigerfileZip = verifyTigerfileZip
