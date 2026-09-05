@@ -23,6 +23,7 @@ import (
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
+	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
 type ZipStreetTuple struct {
@@ -300,6 +301,28 @@ func main() {
 		}
 	}
 
+	// The same relation the zip-city filter is built from, written out so a
+	// caller holding a ZIP Code and no city has something to read rather than
+	// only something to ask. Written before the filter is built, off
+	// zipCityData itself, so the table and the filter cannot disagree about
+	// what we have seen. See poetic-systems/zipcity#17.
+	names := make(zipcities.Table, len(zipCityData))
+	for _, pair := range zipCityData {
+		names.Add(pair.Zip, pair.City)
+	}
+	namesize, err := zipcities.Measure(names)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(namesize)
+	err = writeZipCityNames(
+		path.Join(cwd, "generated", "compiled_filter", "zip-city-names.tsv"),
+		names,
+	)
+	if err != nil {
+		panic(err)
+	}
+
 	// Add ~1/8 of overhead to the count for the base capacity
 	nZC := numZip2City + (numZip2City >> 3)
 	cityFilter := bloom.NewWithEstimates(nZC, 0.01)
@@ -480,6 +503,24 @@ func absentRows(absent ustigerline.AbsentSources) []struct {
 	}
 
 	return rows
+}
+
+// writeZipCityNames writes the ZIP Code to city name table beside the
+// compiled filters. Nothing embeds it yet: what it costs decides whether it
+// ships, and that is read off the file a full generation writes.
+func writeZipCityNames(filename string, names zipcities.Table) error {
+	err := os.MkdirAll(path.Dir(filename), 0755)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return zipcities.Encode(file, names)
 }
 
 func writeAsGob(filename string, data *bloom.BloomFilter) error {
