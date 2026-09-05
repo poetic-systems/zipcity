@@ -127,3 +127,77 @@ func TestAreaOf(t *testing.T) {
 		}
 	}
 }
+
+// The policy the Set field used to carry: ADDR may be absent, the county trio
+// may not. It is now one statement — MayBeAbsent — read here.
+func TestAbsentSourcesUnexpected(t *testing.T) {
+	optional := optionalTypes(allRequiredTigerfiles())
+
+	for _, tc := range []struct {
+		name string
+		in   AbsentSources
+		want []string
+	}{
+		{
+			name: "the eight ADDR-absent county equivalents are allowed",
+			in: AbsentSources{
+				"60010": {"addr"}, "60020": {"addr"}, "60030": {"addr"},
+				"60040": {"addr"}, "60050": {"addr"}, "69085": {"addr"},
+				"69100": {"addr"}, "69120": {"addr"},
+			},
+			want: []string{},
+		},
+		{
+			name: "a county short a required type is not",
+			in:   AbsentSources{"02100": {"edges"}},
+			want: []string{"02100: edges"},
+		},
+		{
+			name: "an allowed absence does not excuse the others on the same area",
+			in:   AbsentSources{"69085": {"addr", "faces", "featnames"}},
+			want: []string{"69085: faces", "69085: featnames"},
+		},
+		{
+			name: "a state missing its place file is reported like any other",
+			in:   AbsentSources{"60": {"place"}},
+			want: []string{"60: place"},
+		},
+		{
+			name: "nothing absent",
+			in:   AbsentSources{},
+			want: []string{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.in.unexpected(optional); !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("unexpected() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestOptionalTypes(t *testing.T) {
+	got := optionalTypes(allRequiredTigerfiles())
+	if !reflect.DeepEqual(got, map[string]bool{"addr": true}) {
+		t.Errorf("optionalTypes() = %v, want map[addr:true]", got)
+	}
+}
+
+func TestCountyPrefixes(t *testing.T) {
+	idx := &tigerfileIndex{
+		release: "tl_2025",
+		areasByType: map[string]map[string]bool{
+			"featnames": areas("02100", "01001", "60010"),
+			"addr":      areas("02100", "01001"),
+			"place":     areas("02", "01", "60"),
+			"state":     areas("us"),
+		},
+	}
+
+	// Only the five digit codes, each county named once however many of its
+	// files the index lists, in an order two runs agree on.
+	want := []string{"tl_2025_01001", "tl_2025_02100", "tl_2025_60010"}
+	if got := idx.countyPrefixes(); !reflect.DeepEqual(got, want) {
+		t.Errorf("countyPrefixes() = %v, want %v", got, want)
+	}
+}

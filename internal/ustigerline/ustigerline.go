@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -43,7 +42,12 @@ type RequiredTigerfiles struct {
 	Source *url.URL
 	Path   string
 	Suffix string
-	Set    string
+
+	// MayBeAbsent says the Census Bureau does not publish this type for
+	// every area at its granularity, so an area the index lists no file of
+	// it for is recorded rather than fatal. It is the exception: anything
+	// added here is required of every area until it is said otherwise.
+	MayBeAbsent bool
 }
 
 // The All Lines shapefile (edges.shp) contains the geometry and attributes of each
@@ -477,23 +481,31 @@ func DownloadAllRequiredTigerfiles() ([]string, AbsentSources, error) {
 // the granularity each is published at.
 func allRequiredTigerfiles() []RequiredTigerfiles {
 	return []RequiredTigerfiles{
-		{ftpbase, featureFTPPath, "_featnames", "county"},
-		{ftpbase, edgeFTPPath, "_edges", "county"},
-		{ftpbase, addrFTPPath, "_addr", "addr"},
-		{ftpbase, facesFTPPath, "_faces", "county"},
-		{ftpbase, placeFTPPath, "_place", "state"},
-		{ftpbase, stateFTPPath, "_state", "us"},
+		{Source: ftpbase, Path: featureFTPPath, Suffix: "_featnames"},
+		{Source: ftpbase, Path: edgeFTPPath, Suffix: "_edges"},
+		{Source: ftpbase, Path: facesFTPPath, Suffix: "_faces"},
+		{Source: ftpbase, Path: placeFTPPath, Suffix: "_place"},
+		{Source: ftpbase, Path: stateFTPPath, Suffix: "_state"},
+
+		// The 2025 release publishes no ADDR file for eight county
+		// equivalents. Those absences are the record AbsentSources is for.
+		// See poetic-systems/zipcity#2 and #7.
+		{Source: ftpbase, Path: addrFTPPath, Suffix: "_addr", MayBeAbsent: true},
 	}
 }
 
 // tigerfileIndex is what the Census Bureau's own FTP indexes say it publishes:
-// every file listed, how many of each set's file types each area has, and
-// which areas each file type covers.
+// every file listed, which areas each file type covers, and the release the
+// file names carry.
+//
+// Which areas each type covers is the only thing anything is derived from.
+// Whether an area is short a file, which counties there are to read, and what
+// was never published are three readings of that one map. See
+// poetic-systems/zipcity#22.
 type tigerfileIndex struct {
 	files       []*url.URL
-	counts      map[string]map[string]int
-	setSizes    map[string]int
 	areasByType map[string]map[string]bool
+	release     string
 }
 
 // readTigerfileIndexes reads the indexes and nothing else. Downloading the
@@ -502,18 +514,9 @@ type tigerfileIndex struct {
 func readTigerfileIndexes(required []RequiredTigerfiles) (*tigerfileIndex, error) {
 	idx := &tigerfileIndex{
 		files:       make([]*url.URL, 0),
-		counts:      make(map[string]map[string]int, 0),
-		setSizes:    make(map[string]int, 0),
 		areasByType: make(map[string]map[string]bool, len(required)),
 	}
 	for _, req := range required {
-		idx.setSizes[req.Set] += 1
-		cnt, ok := idx.counts[req.Set]
-		if !ok {
-			cnt = make(map[string]int, 0)
-			idx.counts[req.Set] = cnt
-		}
-
 		filetype := strings.TrimPrefix(req.Suffix, "_")
 		areas, ok := idx.areasByType[filetype]
 		if !ok {
@@ -529,12 +532,9 @@ func readTigerfileIndexes(required []RequiredTigerfiles) (*tigerfileIndex, error
 
 		for _, v := range sourcefiles {
 			b := strings.TrimSuffix(path.Base(v.String()), ".zip")
-			areas[areaOf(b, req.Suffix)] = true
-			end := strings.LastIndex(b, "_")
-			if end > 0 {
-				b = b[0:end]
-			}
-			cnt[b] += 1
+			area := areaOf(b, req.Suffix)
+			areas[area] = true
+			idx.release = strings.TrimSuffix(b, "_"+area+req.Suffix)
 		}
 	}
 
@@ -546,25 +546,19 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, Absent
 	if err != nil {
 		return nil, nil, err
 	}
-	counts, setSizes, allfiles := idx.counts, idx.setSizes, idx.files
+	allfiles := idx.files
 
-	mismatched := slices.Collect(func(yield func(string) bool) {
-		for setkey, set := range counts {
-			for url, c := range set {
-				if c < setSizes[setkey] {
-					if !yield(url) {
-						return
-					}
-				}
-			}
-		}
-	})
-	if len(mismatched) > 0 {
-		formatted, err := json.MarshalIndent(mismatched, "", "  ")
-		if err != nil {
-			return nil, nil, fmt.Errorf("Mismatched required TIGER file names; error generating report: %w", err)
-		}
-		return nil, nil, fmt.Errorf("Mismatched required TIGER file names; report: %s, %v, %v, %d, %d", formatted, setSizes, counts, len(counts["county"]), len(mismatched))
+	// An area the index lists no file of a required type for is a change at
+	// the Census Bureau, not a gap we can generate past: the filters would be
+	// built from a county described by three of its four files and nothing
+	// would say so. Only the types marked MayBeAbsent are allowed to be
+	// missing, and those are recorded instead. See poetic-systems/zipcity#22.
+	absent := absentSources(idx.areasByType)
+	if unexpected := absent.unexpected(optionalTypes(required)); len(unexpected) > 0 {
+		return nil, nil, fmt.Errorf(
+			"the Census Bureau's index lists no file for %d required area and file type pairs:\n  %s",
+			len(unexpected), strings.Join(unexpected, "\n  "),
+		)
 	}
 
 	err = os.MkdirAll(storagedir, 0755)
@@ -618,7 +612,7 @@ func DownloadRequiredTigerfiles(required []RequiredTigerfiles) ([]string, Absent
 		)
 	}
 
-	return slices.Collect(maps.Keys(counts["county"])), absentSources(idx.areasByType), nil
+	return idx.countyPrefixes(), absent, nil
 }
 
 func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
