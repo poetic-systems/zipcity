@@ -413,7 +413,7 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 			continue
 		}
 		tlid := fieldutil.AsString(rawTLID)
-		fullname := strings.ToUpper(featnames.ExpandFeatureName(fields))
+		fullname := strings.ToUpper(featnames.Pub28FeatureName(fields))
 
 		if tlid != "" && fullname != "" {
 			// build up the list of alternative names for this feature

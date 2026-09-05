@@ -55,6 +55,16 @@ var (
 	spanishShortMap = shortMap(table.Spanish())
 	englishFullMap  = fullMap(table.English())
 	englishShortMap = shortMap(table.English())
+	infoTable       = maps.Collect(func(yield func(string, table.Directional) bool) {
+		for d := range table.All() {
+			if !yield(d.Full, d) {
+				return
+			}
+			if !yield(d.Short, d) {
+				return
+			}
+		}
+	})
 )
 
 func Expand(abrev string, isSpanish bool) string {
@@ -87,4 +97,23 @@ func Abbreviate(full string, isSpanish bool) string {
 		return r
 	}
 	return full
+}
+
+func Pub28(src string) string {
+	// in case it is Spanish, look it up first
+	d, ok := infoTable[src]
+	if ok {
+		if !d.Spanish {
+			return d.Short
+		}
+
+		d, ok = infoTable[d.English]
+		if ok {
+			return d.Short
+		}
+	}
+
+	// the unmatched case just returns src unchanged so we don't
+	// require error handling
+	return src
 }
