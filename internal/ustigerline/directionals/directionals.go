@@ -1,105 +1,61 @@
+// Package directionals reads the PREDIRABRV and SUFDIRABRV fields of a TIGER
+// FEATNAMES record.
+//
+// The rows live in addresstables, where they are the Publication 28 set: TIGER
+// writes the same eight English and eight Spanish directionals. What is here
+// is the expansion a reader of those two fields needs, keyed both ways — a
+// file writes the abbreviation, but the same lookup has to leave a word that
+// arrives already expanded alone.
+//
+// Which of the two sets to read is the caller's decision rather than the
+// field's. N is NORTH on a mainland street and NORTE on a Puerto Rican one,
+// and only the feature type beside it says which.
+//
+// Rows are uppercase, as the whole of addresstables is; the published tables
+// print them in title case.
 package directionals
 
-import "maps"
+import (
+	"iter"
+	"maps"
 
-type DirectionalInfo struct {
-	Dir         string
-	Short       string
-	Spanish     bool
-	Translation string
+	table "github.com/poetic-systems/addresstables/directionals"
+)
+
+// fullMap keys both the abbreviation and the word to the word.
+func fullMap(rows iter.Seq[table.Directional]) map[string]string {
+	return maps.Collect(func(yield func(string, string) bool) {
+		for d := range rows {
+			if !yield(d.Short, d.Full) {
+				return
+			}
+			if !yield(d.Full, d.Full) {
+				return
+			}
+		}
+	})
 }
 
-/*
-Direction Abbreviation Spanish Translation
-
-North N - -
-South S - -
-East E - -
-West W - -
-Northeast NE - -
-Northwest NW - -
-Southeast SE - -
-Southwest SW - -
-Norte N Y North
-Sur S Y South
-Este E Y East
-Oeste O Y West
-Noreste NE Y Northeast
-Noroeste NO Y Northwest
-Sudeste SE Y Southeast
-Sudoeste SO Y Southwest
-*/
-
-var directionals = []DirectionalInfo{
-	{"North", "N", false, ""},
-	{"South", "S", false, ""},
-	{"East", "E", false, ""},
-	{"West", "W", false, ""},
-	{"Northeast", "NE", false, ""},
-	{"Northwest", "NW", false, ""},
-	{"Southeast", "SE", false, ""},
-	{"Southwest", "SW", false, ""},
-	{"Norte", "N", true, "North"},
-	{"Sur", "S", true, "South"},
-	{"Este", "E", true, "East"},
-	{"Oeste", "O", true, "West"},
-	{"Noreste", "NE", true, "Northeast"},
-	{"Noroeste", "NO", true, "Northwest"},
-	{"Sudeste", "SE", true, "Southeast"},
-	{"Sudoeste", "SO", true, "Southwest"},
+// shortMap keys both the word and the abbreviation to the abbreviation.
+func shortMap(rows iter.Seq[table.Directional]) map[string]string {
+	return maps.Collect(func(yield func(string, string) bool) {
+		for d := range rows {
+			if !yield(d.Full, d.Short) {
+				return
+			}
+			if !yield(d.Short, d.Short) {
+				return
+			}
+		}
+	})
 }
 
-var spanishFullMap = maps.Collect(func(yield func(string, string) bool) {
-	for _, v := range directionals {
-		if v.Spanish {
-			if !yield(v.Short, v.Dir) {
-				return
-			}
-			if !yield(v.Dir, v.Dir) {
-				return
-			}
-		}
-	}
-})
-
-var spanishShortMap = maps.Collect(func(yield func(string, string) bool) {
-	for _, v := range directionals {
-		if v.Spanish {
-			if !yield(v.Dir, v.Short) {
-				return
-			}
-			if !yield(v.Short, v.Short) {
-				return
-			}
-		}
-	}
-})
-
-var englishFullMap = maps.Collect(func(yield func(string, string) bool) {
-	for _, v := range directionals {
-		if !v.Spanish {
-			if !yield(v.Short, v.Dir) {
-				return
-			}
-			if !yield(v.Dir, v.Dir) {
-				return
-			}
-		}
-	}
-})
-
-var englishShortMap = maps.Collect(func(yield func(string, string) bool) {
-	for _, v := range directionals {
-		if !v.Spanish {
-			if !yield(v.Short, v.Short) {
-				return
-			}
-			if !yield(v.Dir, v.Short) {
-				return
-			}
-		}
-	}
-})
+var (
+	spanishFullMap  = fullMap(table.Spanish())
+	spanishShortMap = shortMap(table.Spanish())
+	englishFullMap  = fullMap(table.English())
+	englishShortMap = shortMap(table.English())
+)
 
 func Expand(abrev string, isSpanish bool) string {
 	if isSpanish {
