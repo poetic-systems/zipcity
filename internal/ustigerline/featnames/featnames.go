@@ -3,8 +3,8 @@
 //
 // A record does carry a rendered name, in FULLNAME, but it is one abbreviated
 // rendering and is not always complete, so the name is built here from the
-// base name and the four codes around it — PREQUAL, PRETYP, SUFTYP, SUFQUAL —
-// plus the two directional fields.
+// base name and the six fields around it: PREQUAL, PREDIRABRV, PRETYP, SUFTYP,
+// SUFDIRABRV, and SUFQUAL.
 //
 // The rows those codes name are Appendix D of the Census Bureau's technical
 // documentation and live in addresstables. What is here is the lookup and the
@@ -35,7 +35,7 @@ var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	}
 })
 
-var pub28StreeSuffixes = maps.Collect(func(yield func(string, string) bool) {
+var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	for s := range streetsuffixes.All() {
 		for _, a := range s.Alt {
 			if !yield(a, s.Short) {
@@ -106,8 +106,8 @@ func Pub28FeatureName(attr map[string]any) string {
 			isSpanish = true
 		}
 
-		// only abbreviate know pub28 suffixes
-		p28, ok := pub28StreeSuffixes[suffixInfo.Full]
+		// only abbreviate known pub28 suffixes
+		p28, ok := pub28StreetSuffixes[suffixInfo.Full]
 		if ok {
 			suffixtype = p28
 		} else {
@@ -118,7 +118,7 @@ func Pub28FeatureName(attr map[string]any) string {
 	// handle directionals
 
 	prefixdirectional := ""
-	// attr['PREDIRABRV'] will contain a string abreviation for any predirectional
+	// attr['PREDIRABRV'] will contain a string abbreviation for any predirectional
 	rawpdir, ok := attr["PREDIRABRV"]
 	if ok {
 		pdir := fieldutil.AsString(rawpdir)
@@ -129,7 +129,7 @@ func Pub28FeatureName(attr map[string]any) string {
 	}
 
 	suffixdirectional := ""
-	// attr['SUFDIRABRV'] will contain a string abreviation for any postdirectional
+	// attr['SUFDIRABRV'] will contain a string abbreviation for any postdirectional
 	rawsdir, ok := attr["SUFDIRABRV"]
 	if ok {
 		sdir := fieldutil.AsString(rawsdir)
