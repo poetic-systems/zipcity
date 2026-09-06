@@ -290,7 +290,7 @@ func main() {
 		numThisZip2Sreet := uint(len(streets))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nZS := numThisZip2Sreet + (numThisZip2Sreet >> 3)
-		streetFilter := bloom.NewWithEstimates(nZS, 0.01)
+		streetFilter := bloom.NewWithEstimates(nZS, 0.005)
 
 		for key := range streets {
 			streetFilter.Add([]byte(key))
@@ -316,7 +316,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nZC := numZip2City + (numZip2City >> 3)
-	cityFilter := bloom.NewWithEstimates(nZC, 0.01)
+	cityFilter := bloom.NewWithEstimates(nZC, 0.005)
 
 	for key := range zipCityData {
 		cityFilter.Add([]byte(key))
@@ -338,7 +338,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nCS := numCity2Street + (numCity2Street >> 3)
-	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.01)
+	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.005)
 
 	for key := range cityStreetData {
 		cityStreetFilter.Add([]byte(key))

@@ -21,6 +21,36 @@ var testData = []struct {
 		Zip:    "84054",
 	},
 	{
+		Street: "CALLE LOIZA",
+		City:   "San Juan",
+		State:  "PR",
+		Zip:    "00909",
+	},
+	{
+		Street: "CALLE LOÍZA",
+		City:   "San Juan",
+		State:  "PR",
+		Zip:    "00909",
+	},
+	{
+		Street: "CALLE LOIZA",
+		City:   "San Juan",
+		State:  "PR",
+		Zip:    "00913",
+	},
+	{
+		Street: "CALLE LOÍZA",
+		City:   "San Juan",
+		State:  "PR",
+		Zip:    "00913",
+	},
+	{
+		Street: "W 200 N",
+		City:   "NORTH SALT LAKE",
+		State:  "UT",
+		Zip:    "84054",
+	},
+	{
 
 		Street: "W 9000 S",
 		City:   "West Jordan",
@@ -33,11 +63,52 @@ var testData = []struct {
 		State:  "UT",
 		Zip:    "84088",
 	},
+	// {
+	// 	Street: "Fox Park Dr",
+	// 	City:   "West Jordan",
+	// 	State:  "UT",
+	// 	Zip:    "84088",
+	// },
 	{
 		Street: "W 9200 S",
 		City:   "West Jordan",
 		State:  "UT",
 		Zip:    "84088",
+	},
+	{
+		Street: "9200 S",
+		City:   "West Jordan",
+		State:  "UT",
+		Zip:    "84088",
+	},
+	{
+		Street: "Pleasant Hill Rd",
+		City:   "Pleasant Hill",
+		State:  "CA",
+		Zip:    "94523",
+	},
+	{
+		Street: "The Alameda",
+		City:   "San Jose",
+		State:  "CA",
+		Zip:    "95126",
+	},
+	{
+		Street: "The Alameda",
+		City:   "San José",
+		State:  "CA",
+		Zip:    "95126",
+	},
+	{
+		Street: "Chalan Tun Herman Pan",
+		// TODO: Addresses and roads in the Northern Mariana Islands might deserve a
+		// closer look. In particular, if someone puts "Saipan" as the city it
+		// is not going to work - but the USPS Zip Locale Detail.xls shows the
+		// "Physical City" field for 96950 as "Saipan" (though locale list a few
+		// different names.)
+		City:  "DanDan",
+		State: "MP",
+		Zip:   "96950",
 	},
 }
 
