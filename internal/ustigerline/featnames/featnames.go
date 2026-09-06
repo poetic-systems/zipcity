@@ -144,7 +144,7 @@ func Pub28FeatureName(attr map[string]any) string {
 	// valid directional prefix.)
 	// https://www2.census.gov/geo/tiger/rd_2ktiger/tgrrd2k.pdf lists "Ó" as one
 	// of the characters that it previously used square brackets to indicate.
-	// On that basis, the large number of streets in puerto rico starting with
+	// On that basis, the roughly 77 street records in puerto rico starting with
 	// "Ó " are believed to result from the migration of pre-2000 ASCII-to-UTF-8
 	// diacritical encodings in Puerto Rican/Spanish street records, which persist
 	// as literal strings in annual TIGER/Line roll-forwards.
