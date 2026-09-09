@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"regexp"
+
 	bloom "github.com/bits-and-blooms/bloom/v3"
 )
 
@@ -15,109 +16,109 @@ var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 type CompiledFilter string
 
 const (
-	Unrecognized  CompiledFilter = ""
-  ZipCity       CompiledFilter = "zip-city"
-  CityStreet    CompiledFilter = "city-street"
-	ZipStreet00   CompiledFilter = "zip-street-00"
-	ZipStreet01   CompiledFilter = "zip-street-01"
-	ZipStreet02   CompiledFilter = "zip-street-02"
-	ZipStreet03   CompiledFilter = "zip-street-03"
-	ZipStreet04   CompiledFilter = "zip-street-04"
-	ZipStreet05   CompiledFilter = "zip-street-05"
-	ZipStreet06   CompiledFilter = "zip-street-06"
-	ZipStreet07   CompiledFilter = "zip-street-07"
-	ZipStreet08   CompiledFilter = "zip-street-08"
-	ZipStreet09   CompiledFilter = "zip-street-09"
-	ZipStreet10   CompiledFilter = "zip-street-10"
-	ZipStreet11   CompiledFilter = "zip-street-11"
-	ZipStreet12   CompiledFilter = "zip-street-12"
-	ZipStreet13   CompiledFilter = "zip-street-13"
-	ZipStreet14   CompiledFilter = "zip-street-14"
-	ZipStreet15   CompiledFilter = "zip-street-15"
-	ZipStreet16   CompiledFilter = "zip-street-16"
-	ZipStreet17   CompiledFilter = "zip-street-17"
-	ZipStreet18   CompiledFilter = "zip-street-18"
-	ZipStreet19   CompiledFilter = "zip-street-19"
-	ZipStreet20   CompiledFilter = "zip-street-20"
-	ZipStreet21   CompiledFilter = "zip-street-21"
-	ZipStreet22   CompiledFilter = "zip-street-22"
-	ZipStreet23   CompiledFilter = "zip-street-23"
-	ZipStreet24   CompiledFilter = "zip-street-24"
-	ZipStreet25   CompiledFilter = "zip-street-25"
-	ZipStreet26   CompiledFilter = "zip-street-26"
-	ZipStreet27   CompiledFilter = "zip-street-27"
-	ZipStreet28   CompiledFilter = "zip-street-28"
-	ZipStreet29   CompiledFilter = "zip-street-29"
-	ZipStreet30   CompiledFilter = "zip-street-30"
-	ZipStreet31   CompiledFilter = "zip-street-31"
-	ZipStreet32   CompiledFilter = "zip-street-32"
-	ZipStreet33   CompiledFilter = "zip-street-33"
-	ZipStreet34   CompiledFilter = "zip-street-34"
-	ZipStreet35   CompiledFilter = "zip-street-35"
-	ZipStreet36   CompiledFilter = "zip-street-36"
-	ZipStreet37   CompiledFilter = "zip-street-37"
-	ZipStreet38   CompiledFilter = "zip-street-38"
-	ZipStreet39   CompiledFilter = "zip-street-39"
-	ZipStreet40   CompiledFilter = "zip-street-40"
-	ZipStreet41   CompiledFilter = "zip-street-41"
-	ZipStreet42   CompiledFilter = "zip-street-42"
-	ZipStreet43   CompiledFilter = "zip-street-43"
-	ZipStreet44   CompiledFilter = "zip-street-44"
-	ZipStreet45   CompiledFilter = "zip-street-45"
-	ZipStreet46   CompiledFilter = "zip-street-46"
-	ZipStreet47   CompiledFilter = "zip-street-47"
-	ZipStreet48   CompiledFilter = "zip-street-48"
-	ZipStreet49   CompiledFilter = "zip-street-49"
-	ZipStreet50   CompiledFilter = "zip-street-50"
-	ZipStreet51   CompiledFilter = "zip-street-51"
-	ZipStreet52   CompiledFilter = "zip-street-52"
-	ZipStreet53   CompiledFilter = "zip-street-53"
-	ZipStreet54   CompiledFilter = "zip-street-54"
-	ZipStreet55   CompiledFilter = "zip-street-55"
-	ZipStreet56   CompiledFilter = "zip-street-56"
-	ZipStreet57   CompiledFilter = "zip-street-57"
-	ZipStreet58   CompiledFilter = "zip-street-58"
-	ZipStreet59   CompiledFilter = "zip-street-59"
-	ZipStreet60   CompiledFilter = "zip-street-60"
-	ZipStreet61   CompiledFilter = "zip-street-61"
-	ZipStreet62   CompiledFilter = "zip-street-62"
-	ZipStreet63   CompiledFilter = "zip-street-63"
-	ZipStreet64   CompiledFilter = "zip-street-64"
-	ZipStreet65   CompiledFilter = "zip-street-65"
-	ZipStreet66   CompiledFilter = "zip-street-66"
-	ZipStreet67   CompiledFilter = "zip-street-67"
-	ZipStreet68   CompiledFilter = "zip-street-68"
-	ZipStreet69   CompiledFilter = "zip-street-69"
-	ZipStreet70   CompiledFilter = "zip-street-70"
-	ZipStreet71   CompiledFilter = "zip-street-71"
-	ZipStreet72   CompiledFilter = "zip-street-72"
-	ZipStreet73   CompiledFilter = "zip-street-73"
-	ZipStreet74   CompiledFilter = "zip-street-74"
-	ZipStreet75   CompiledFilter = "zip-street-75"
-	ZipStreet76   CompiledFilter = "zip-street-76"
-	ZipStreet77   CompiledFilter = "zip-street-77"
-	ZipStreet78   CompiledFilter = "zip-street-78"
-	ZipStreet79   CompiledFilter = "zip-street-79"
-	ZipStreet80   CompiledFilter = "zip-street-80"
-	ZipStreet81   CompiledFilter = "zip-street-81"
-	ZipStreet82   CompiledFilter = "zip-street-82"
-	ZipStreet83   CompiledFilter = "zip-street-83"
-	ZipStreet84   CompiledFilter = "zip-street-84"
-	ZipStreet85   CompiledFilter = "zip-street-85"
-	ZipStreet86   CompiledFilter = "zip-street-86"
-	ZipStreet87   CompiledFilter = "zip-street-87"
-	ZipStreet88   CompiledFilter = "zip-street-88"
-	ZipStreet89   CompiledFilter = "zip-street-89"
-	ZipStreet90   CompiledFilter = "zip-street-90"
-	ZipStreet91   CompiledFilter = "zip-street-91"
-	ZipStreet92   CompiledFilter = "zip-street-92"
-	ZipStreet93   CompiledFilter = "zip-street-93"
-	ZipStreet94   CompiledFilter = "zip-street-94"
-	ZipStreet95   CompiledFilter = "zip-street-95"
-	ZipStreet96   CompiledFilter = "zip-street-96"
-	ZipStreet97   CompiledFilter = "zip-street-97"
-	ZipStreet98   CompiledFilter = "zip-street-98"
-	ZipStreet99   CompiledFilter = "zip-street-99"
+	Unrecognized CompiledFilter = ""
+	ZipCity      CompiledFilter = "zip-city"
+	CityStreet   CompiledFilter = "city-street"
+	ZipStreet00  CompiledFilter = "zip-street-00"
+	ZipStreet01  CompiledFilter = "zip-street-01"
+	ZipStreet02  CompiledFilter = "zip-street-02"
+	ZipStreet03  CompiledFilter = "zip-street-03"
+	ZipStreet04  CompiledFilter = "zip-street-04"
+	ZipStreet05  CompiledFilter = "zip-street-05"
+	ZipStreet06  CompiledFilter = "zip-street-06"
+	ZipStreet07  CompiledFilter = "zip-street-07"
+	ZipStreet08  CompiledFilter = "zip-street-08"
+	ZipStreet09  CompiledFilter = "zip-street-09"
+	ZipStreet10  CompiledFilter = "zip-street-10"
+	ZipStreet11  CompiledFilter = "zip-street-11"
+	ZipStreet12  CompiledFilter = "zip-street-12"
+	ZipStreet13  CompiledFilter = "zip-street-13"
+	ZipStreet14  CompiledFilter = "zip-street-14"
+	ZipStreet15  CompiledFilter = "zip-street-15"
+	ZipStreet16  CompiledFilter = "zip-street-16"
+	ZipStreet17  CompiledFilter = "zip-street-17"
+	ZipStreet18  CompiledFilter = "zip-street-18"
+	ZipStreet19  CompiledFilter = "zip-street-19"
+	ZipStreet20  CompiledFilter = "zip-street-20"
+	ZipStreet21  CompiledFilter = "zip-street-21"
+	ZipStreet22  CompiledFilter = "zip-street-22"
+	ZipStreet23  CompiledFilter = "zip-street-23"
+	ZipStreet24  CompiledFilter = "zip-street-24"
+	ZipStreet25  CompiledFilter = "zip-street-25"
+	ZipStreet26  CompiledFilter = "zip-street-26"
+	ZipStreet27  CompiledFilter = "zip-street-27"
+	ZipStreet28  CompiledFilter = "zip-street-28"
+	ZipStreet29  CompiledFilter = "zip-street-29"
+	ZipStreet30  CompiledFilter = "zip-street-30"
+	ZipStreet31  CompiledFilter = "zip-street-31"
+	ZipStreet32  CompiledFilter = "zip-street-32"
+	ZipStreet33  CompiledFilter = "zip-street-33"
+	ZipStreet34  CompiledFilter = "zip-street-34"
+	ZipStreet35  CompiledFilter = "zip-street-35"
+	ZipStreet36  CompiledFilter = "zip-street-36"
+	ZipStreet37  CompiledFilter = "zip-street-37"
+	ZipStreet38  CompiledFilter = "zip-street-38"
+	ZipStreet39  CompiledFilter = "zip-street-39"
+	ZipStreet40  CompiledFilter = "zip-street-40"
+	ZipStreet41  CompiledFilter = "zip-street-41"
+	ZipStreet42  CompiledFilter = "zip-street-42"
+	ZipStreet43  CompiledFilter = "zip-street-43"
+	ZipStreet44  CompiledFilter = "zip-street-44"
+	ZipStreet45  CompiledFilter = "zip-street-45"
+	ZipStreet46  CompiledFilter = "zip-street-46"
+	ZipStreet47  CompiledFilter = "zip-street-47"
+	ZipStreet48  CompiledFilter = "zip-street-48"
+	ZipStreet49  CompiledFilter = "zip-street-49"
+	ZipStreet50  CompiledFilter = "zip-street-50"
+	ZipStreet51  CompiledFilter = "zip-street-51"
+	ZipStreet52  CompiledFilter = "zip-street-52"
+	ZipStreet53  CompiledFilter = "zip-street-53"
+	ZipStreet54  CompiledFilter = "zip-street-54"
+	ZipStreet55  CompiledFilter = "zip-street-55"
+	ZipStreet56  CompiledFilter = "zip-street-56"
+	ZipStreet57  CompiledFilter = "zip-street-57"
+	ZipStreet58  CompiledFilter = "zip-street-58"
+	ZipStreet59  CompiledFilter = "zip-street-59"
+	ZipStreet60  CompiledFilter = "zip-street-60"
+	ZipStreet61  CompiledFilter = "zip-street-61"
+	ZipStreet62  CompiledFilter = "zip-street-62"
+	ZipStreet63  CompiledFilter = "zip-street-63"
+	ZipStreet64  CompiledFilter = "zip-street-64"
+	ZipStreet65  CompiledFilter = "zip-street-65"
+	ZipStreet66  CompiledFilter = "zip-street-66"
+	ZipStreet67  CompiledFilter = "zip-street-67"
+	ZipStreet68  CompiledFilter = "zip-street-68"
+	ZipStreet69  CompiledFilter = "zip-street-69"
+	ZipStreet70  CompiledFilter = "zip-street-70"
+	ZipStreet71  CompiledFilter = "zip-street-71"
+	ZipStreet72  CompiledFilter = "zip-street-72"
+	ZipStreet73  CompiledFilter = "zip-street-73"
+	ZipStreet74  CompiledFilter = "zip-street-74"
+	ZipStreet75  CompiledFilter = "zip-street-75"
+	ZipStreet76  CompiledFilter = "zip-street-76"
+	ZipStreet77  CompiledFilter = "zip-street-77"
+	ZipStreet78  CompiledFilter = "zip-street-78"
+	ZipStreet79  CompiledFilter = "zip-street-79"
+	ZipStreet80  CompiledFilter = "zip-street-80"
+	ZipStreet81  CompiledFilter = "zip-street-81"
+	ZipStreet82  CompiledFilter = "zip-street-82"
+	ZipStreet83  CompiledFilter = "zip-street-83"
+	ZipStreet84  CompiledFilter = "zip-street-84"
+	ZipStreet85  CompiledFilter = "zip-street-85"
+	ZipStreet86  CompiledFilter = "zip-street-86"
+	ZipStreet87  CompiledFilter = "zip-street-87"
+	ZipStreet88  CompiledFilter = "zip-street-88"
+	ZipStreet89  CompiledFilter = "zip-street-89"
+	ZipStreet90  CompiledFilter = "zip-street-90"
+	ZipStreet91  CompiledFilter = "zip-street-91"
+	ZipStreet92  CompiledFilter = "zip-street-92"
+	ZipStreet93  CompiledFilter = "zip-street-93"
+	ZipStreet94  CompiledFilter = "zip-street-94"
+	ZipStreet95  CompiledFilter = "zip-street-95"
+	ZipStreet96  CompiledFilter = "zip-street-96"
+	ZipStreet97  CompiledFilter = "zip-street-97"
+	ZipStreet98  CompiledFilter = "zip-street-98"
+	ZipStreet99  CompiledFilter = "zip-street-99"
 )
 
 func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
@@ -550,313 +551,312 @@ func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 	return &filter, nil
 }
 
-
 //go:embed zip-street-00.bin
-var RawZipStreet00FilterBytes []byte    
+var RawZipStreet00FilterBytes []byte
 
 //go:embed zip-street-01.bin
-var RawZipStreet01FilterBytes []byte    
+var RawZipStreet01FilterBytes []byte
 
 //go:embed zip-street-02.bin
-var RawZipStreet02FilterBytes []byte    
+var RawZipStreet02FilterBytes []byte
 
 //go:embed zip-street-03.bin
-var RawZipStreet03FilterBytes []byte    
+var RawZipStreet03FilterBytes []byte
 
 //go:embed zip-street-04.bin
-var RawZipStreet04FilterBytes []byte    
+var RawZipStreet04FilterBytes []byte
 
 //go:embed zip-street-05.bin
-var RawZipStreet05FilterBytes []byte    
+var RawZipStreet05FilterBytes []byte
 
 //go:embed zip-street-06.bin
-var RawZipStreet06FilterBytes []byte    
+var RawZipStreet06FilterBytes []byte
 
 //go:embed zip-street-07.bin
-var RawZipStreet07FilterBytes []byte    
+var RawZipStreet07FilterBytes []byte
 
 //go:embed zip-street-08.bin
-var RawZipStreet08FilterBytes []byte    
+var RawZipStreet08FilterBytes []byte
 
 //go:embed zip-street-09.bin
-var RawZipStreet09FilterBytes []byte    
+var RawZipStreet09FilterBytes []byte
 
 //go:embed zip-street-10.bin
-var RawZipStreet10FilterBytes []byte    
+var RawZipStreet10FilterBytes []byte
 
 //go:embed zip-street-11.bin
-var RawZipStreet11FilterBytes []byte    
+var RawZipStreet11FilterBytes []byte
 
 //go:embed zip-street-12.bin
-var RawZipStreet12FilterBytes []byte    
+var RawZipStreet12FilterBytes []byte
 
 //go:embed zip-street-13.bin
-var RawZipStreet13FilterBytes []byte    
+var RawZipStreet13FilterBytes []byte
 
 //go:embed zip-street-14.bin
-var RawZipStreet14FilterBytes []byte    
+var RawZipStreet14FilterBytes []byte
 
 //go:embed zip-street-15.bin
-var RawZipStreet15FilterBytes []byte    
+var RawZipStreet15FilterBytes []byte
 
 //go:embed zip-street-16.bin
-var RawZipStreet16FilterBytes []byte    
+var RawZipStreet16FilterBytes []byte
 
 //go:embed zip-street-17.bin
-var RawZipStreet17FilterBytes []byte    
+var RawZipStreet17FilterBytes []byte
 
 //go:embed zip-street-18.bin
-var RawZipStreet18FilterBytes []byte    
+var RawZipStreet18FilterBytes []byte
 
 //go:embed zip-street-19.bin
-var RawZipStreet19FilterBytes []byte    
+var RawZipStreet19FilterBytes []byte
 
 //go:embed zip-street-20.bin
-var RawZipStreet20FilterBytes []byte    
+var RawZipStreet20FilterBytes []byte
 
 //go:embed zip-street-21.bin
-var RawZipStreet21FilterBytes []byte    
+var RawZipStreet21FilterBytes []byte
 
 //go:embed zip-street-22.bin
-var RawZipStreet22FilterBytes []byte    
+var RawZipStreet22FilterBytes []byte
 
 //go:embed zip-street-23.bin
-var RawZipStreet23FilterBytes []byte    
+var RawZipStreet23FilterBytes []byte
 
 //go:embed zip-street-24.bin
-var RawZipStreet24FilterBytes []byte    
+var RawZipStreet24FilterBytes []byte
 
 //go:embed zip-street-25.bin
-var RawZipStreet25FilterBytes []byte    
+var RawZipStreet25FilterBytes []byte
 
 //go:embed zip-street-26.bin
-var RawZipStreet26FilterBytes []byte    
+var RawZipStreet26FilterBytes []byte
 
 //go:embed zip-street-27.bin
-var RawZipStreet27FilterBytes []byte    
+var RawZipStreet27FilterBytes []byte
 
 //go:embed zip-street-28.bin
-var RawZipStreet28FilterBytes []byte    
+var RawZipStreet28FilterBytes []byte
 
 //go:embed zip-street-29.bin
-var RawZipStreet29FilterBytes []byte    
+var RawZipStreet29FilterBytes []byte
 
 //go:embed zip-street-30.bin
-var RawZipStreet30FilterBytes []byte    
+var RawZipStreet30FilterBytes []byte
 
 //go:embed zip-street-31.bin
-var RawZipStreet31FilterBytes []byte    
+var RawZipStreet31FilterBytes []byte
 
 //go:embed zip-street-32.bin
-var RawZipStreet32FilterBytes []byte    
+var RawZipStreet32FilterBytes []byte
 
 //go:embed zip-street-33.bin
-var RawZipStreet33FilterBytes []byte    
+var RawZipStreet33FilterBytes []byte
 
 //go:embed zip-street-34.bin
-var RawZipStreet34FilterBytes []byte    
+var RawZipStreet34FilterBytes []byte
 
 //go:embed zip-street-35.bin
-var RawZipStreet35FilterBytes []byte    
+var RawZipStreet35FilterBytes []byte
 
 //go:embed zip-street-36.bin
-var RawZipStreet36FilterBytes []byte    
+var RawZipStreet36FilterBytes []byte
 
 //go:embed zip-street-37.bin
-var RawZipStreet37FilterBytes []byte    
+var RawZipStreet37FilterBytes []byte
 
 //go:embed zip-street-38.bin
-var RawZipStreet38FilterBytes []byte    
+var RawZipStreet38FilterBytes []byte
 
 //go:embed zip-street-39.bin
-var RawZipStreet39FilterBytes []byte    
+var RawZipStreet39FilterBytes []byte
 
 //go:embed zip-street-40.bin
-var RawZipStreet40FilterBytes []byte    
+var RawZipStreet40FilterBytes []byte
 
 //go:embed zip-street-41.bin
-var RawZipStreet41FilterBytes []byte    
+var RawZipStreet41FilterBytes []byte
 
 //go:embed zip-street-42.bin
-var RawZipStreet42FilterBytes []byte    
+var RawZipStreet42FilterBytes []byte
 
 //go:embed zip-street-43.bin
-var RawZipStreet43FilterBytes []byte    
+var RawZipStreet43FilterBytes []byte
 
 //go:embed zip-street-44.bin
-var RawZipStreet44FilterBytes []byte    
+var RawZipStreet44FilterBytes []byte
 
 //go:embed zip-street-45.bin
-var RawZipStreet45FilterBytes []byte    
+var RawZipStreet45FilterBytes []byte
 
 //go:embed zip-street-46.bin
-var RawZipStreet46FilterBytes []byte    
+var RawZipStreet46FilterBytes []byte
 
 //go:embed zip-street-47.bin
-var RawZipStreet47FilterBytes []byte    
+var RawZipStreet47FilterBytes []byte
 
 //go:embed zip-street-48.bin
-var RawZipStreet48FilterBytes []byte    
+var RawZipStreet48FilterBytes []byte
 
 //go:embed zip-street-49.bin
-var RawZipStreet49FilterBytes []byte    
+var RawZipStreet49FilterBytes []byte
 
 //go:embed zip-street-50.bin
-var RawZipStreet50FilterBytes []byte    
+var RawZipStreet50FilterBytes []byte
 
 //go:embed zip-street-51.bin
-var RawZipStreet51FilterBytes []byte    
+var RawZipStreet51FilterBytes []byte
 
 //go:embed zip-street-52.bin
-var RawZipStreet52FilterBytes []byte    
+var RawZipStreet52FilterBytes []byte
 
 //go:embed zip-street-53.bin
-var RawZipStreet53FilterBytes []byte    
+var RawZipStreet53FilterBytes []byte
 
 //go:embed zip-street-54.bin
-var RawZipStreet54FilterBytes []byte    
+var RawZipStreet54FilterBytes []byte
 
 //go:embed zip-street-55.bin
-var RawZipStreet55FilterBytes []byte    
+var RawZipStreet55FilterBytes []byte
 
 //go:embed zip-street-56.bin
-var RawZipStreet56FilterBytes []byte    
+var RawZipStreet56FilterBytes []byte
 
 //go:embed zip-street-57.bin
-var RawZipStreet57FilterBytes []byte    
+var RawZipStreet57FilterBytes []byte
 
 //go:embed zip-street-58.bin
-var RawZipStreet58FilterBytes []byte    
+var RawZipStreet58FilterBytes []byte
 
 //go:embed zip-street-59.bin
-var RawZipStreet59FilterBytes []byte    
+var RawZipStreet59FilterBytes []byte
 
 //go:embed zip-street-60.bin
-var RawZipStreet60FilterBytes []byte    
+var RawZipStreet60FilterBytes []byte
 
 //go:embed zip-street-61.bin
-var RawZipStreet61FilterBytes []byte    
+var RawZipStreet61FilterBytes []byte
 
 //go:embed zip-street-62.bin
-var RawZipStreet62FilterBytes []byte    
+var RawZipStreet62FilterBytes []byte
 
 //go:embed zip-street-63.bin
-var RawZipStreet63FilterBytes []byte    
+var RawZipStreet63FilterBytes []byte
 
 //go:embed zip-street-64.bin
-var RawZipStreet64FilterBytes []byte    
+var RawZipStreet64FilterBytes []byte
 
 //go:embed zip-street-65.bin
-var RawZipStreet65FilterBytes []byte    
+var RawZipStreet65FilterBytes []byte
 
 //go:embed zip-street-66.bin
-var RawZipStreet66FilterBytes []byte    
+var RawZipStreet66FilterBytes []byte
 
 //go:embed zip-street-67.bin
-var RawZipStreet67FilterBytes []byte    
+var RawZipStreet67FilterBytes []byte
 
 //go:embed zip-street-68.bin
-var RawZipStreet68FilterBytes []byte    
+var RawZipStreet68FilterBytes []byte
 
 //go:embed zip-street-69.bin
-var RawZipStreet69FilterBytes []byte    
+var RawZipStreet69FilterBytes []byte
 
 //go:embed zip-street-70.bin
-var RawZipStreet70FilterBytes []byte    
+var RawZipStreet70FilterBytes []byte
 
 //go:embed zip-street-71.bin
-var RawZipStreet71FilterBytes []byte    
+var RawZipStreet71FilterBytes []byte
 
 //go:embed zip-street-72.bin
-var RawZipStreet72FilterBytes []byte    
+var RawZipStreet72FilterBytes []byte
 
 //go:embed zip-street-73.bin
-var RawZipStreet73FilterBytes []byte    
+var RawZipStreet73FilterBytes []byte
 
 //go:embed zip-street-74.bin
-var RawZipStreet74FilterBytes []byte    
+var RawZipStreet74FilterBytes []byte
 
 //go:embed zip-street-75.bin
-var RawZipStreet75FilterBytes []byte    
+var RawZipStreet75FilterBytes []byte
 
 //go:embed zip-street-76.bin
-var RawZipStreet76FilterBytes []byte    
+var RawZipStreet76FilterBytes []byte
 
 //go:embed zip-street-77.bin
-var RawZipStreet77FilterBytes []byte    
+var RawZipStreet77FilterBytes []byte
 
 //go:embed zip-street-78.bin
-var RawZipStreet78FilterBytes []byte    
+var RawZipStreet78FilterBytes []byte
 
 //go:embed zip-street-79.bin
-var RawZipStreet79FilterBytes []byte    
+var RawZipStreet79FilterBytes []byte
 
 //go:embed zip-street-80.bin
-var RawZipStreet80FilterBytes []byte    
+var RawZipStreet80FilterBytes []byte
 
 //go:embed zip-street-81.bin
-var RawZipStreet81FilterBytes []byte    
+var RawZipStreet81FilterBytes []byte
 
 //go:embed zip-street-82.bin
-var RawZipStreet82FilterBytes []byte    
+var RawZipStreet82FilterBytes []byte
 
 //go:embed zip-street-83.bin
-var RawZipStreet83FilterBytes []byte    
+var RawZipStreet83FilterBytes []byte
 
 //go:embed zip-street-84.bin
-var RawZipStreet84FilterBytes []byte    
+var RawZipStreet84FilterBytes []byte
 
 //go:embed zip-street-85.bin
-var RawZipStreet85FilterBytes []byte    
+var RawZipStreet85FilterBytes []byte
 
 //go:embed zip-street-86.bin
-var RawZipStreet86FilterBytes []byte    
+var RawZipStreet86FilterBytes []byte
 
 //go:embed zip-street-87.bin
-var RawZipStreet87FilterBytes []byte    
+var RawZipStreet87FilterBytes []byte
 
 //go:embed zip-street-88.bin
-var RawZipStreet88FilterBytes []byte    
+var RawZipStreet88FilterBytes []byte
 
 //go:embed zip-street-89.bin
-var RawZipStreet89FilterBytes []byte    
+var RawZipStreet89FilterBytes []byte
 
 //go:embed zip-street-90.bin
-var RawZipStreet90FilterBytes []byte    
+var RawZipStreet90FilterBytes []byte
 
 //go:embed zip-street-91.bin
-var RawZipStreet91FilterBytes []byte    
+var RawZipStreet91FilterBytes []byte
 
 //go:embed zip-street-92.bin
-var RawZipStreet92FilterBytes []byte    
+var RawZipStreet92FilterBytes []byte
 
 //go:embed zip-street-93.bin
-var RawZipStreet93FilterBytes []byte    
+var RawZipStreet93FilterBytes []byte
 
 //go:embed zip-street-94.bin
-var RawZipStreet94FilterBytes []byte    
+var RawZipStreet94FilterBytes []byte
 
 //go:embed zip-street-95.bin
-var RawZipStreet95FilterBytes []byte    
+var RawZipStreet95FilterBytes []byte
 
 //go:embed zip-street-96.bin
-var RawZipStreet96FilterBytes []byte    
+var RawZipStreet96FilterBytes []byte
 
 //go:embed zip-street-97.bin
-var RawZipStreet97FilterBytes []byte    
+var RawZipStreet97FilterBytes []byte
 
 //go:embed zip-street-98.bin
-var RawZipStreet98FilterBytes []byte    
+var RawZipStreet98FilterBytes []byte
 
 //go:embed zip-street-99.bin
-var RawZipStreet99FilterBytes []byte    
-
+var RawZipStreet99FilterBytes []byte
 
 // RawZipCityFilterBytes holds the pre-compiled zip-city Bloom filter
+//
 //go:embed zip-city.bin
 var RawZipCityFilterBytes []byte
 
 // RawCityStreetFilterBytes holds the pre-compiled city-street Bloom filter
+//
 //go:embed city-street.bin
 var RawCityStreetFilterBytes []byte
-

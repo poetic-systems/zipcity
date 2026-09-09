@@ -6,9 +6,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"go/format"
 	"maps"
 	"os"
 	"path"
@@ -354,6 +356,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"regexp"
+
 	bloom "github.com/bits-and-blooms/bloom/v3"
 )
 
@@ -376,9 +379,9 @@ var AbsentSources = map[string][]string{
 type CompiledFilter string
 
 const (
-	Unrecognized  CompiledFilter = ""
-  ZipCity       CompiledFilter = "zip-city"
-  CityStreet    CompiledFilter = "city-street"
+	Unrecognized CompiledFilter = ""
+	ZipCity      CompiledFilter = "zip-city"
+	CityStreet   CompiledFilter = "city-street"
 {{- range $varName, $zsidentifier := .Files }}
 	{{ $varName }}   CompiledFilter = "{{- $zsidentifier -}}"
 {{- end }}
@@ -424,7 +427,7 @@ func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
 
 {{ range $varName, $zsidentifier := .Files }}
 //go:embed {{ $zsidentifier -}}.bin
-var Raw{{ $varName }}FilterBytes []byte    
+var Raw{{ $varName }}FilterBytes []byte
 {{ end }}
 
 // RawZipCityFilterBytes holds the pre-compiled zip-city Bloom filter
@@ -445,13 +448,10 @@ var RawCityStreetFilterBytes []byte
 	if err != nil {
 		panic(err)
 	}
-	outFile, err := os.Create("./generated/compiled_filter/compiled_filters.go")
-	if err != nil {
-		panic(err)
-	}
-	defer outFile.Close()
-
-	err = t.Execute(outFile, map[string]interface{}{
+	// Format what the template rendered rather than trusting its whitespace,
+	// so the generated package is gofmt-clean however the template is written.
+	var rendered bytes.Buffer
+	err = t.Execute(&rendered, map[string]interface{}{
 		"Files":  zipstreetfiles,
 		"Absent": absentRows(absent),
 		"Now":    now.UTC().Format(time.RFC3339),
@@ -459,7 +459,15 @@ var RawCityStreetFilterBytes []byte
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Successfully generated %s\n", outFile.Name())
+	formatted, err := format.Source(rendered.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	outName := "./generated/compiled_filter/compiled_filters.go"
+	if err := os.WriteFile(outName, formatted, 0644); err != nil {
+		panic(err)
+	}
+	fmt.Printf("Successfully generated %s\n", outName)
 }
 
 // absentRows puts the absent-source report in a fixed order, so that two
