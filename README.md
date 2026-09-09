@@ -199,3 +199,20 @@ two known primary causes:
    - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_42065_faces.zip>
      Additionally, there are no address range files for the Marshal Islands and
      the Northern Marianas Islands.
+
+2. A published file can carry a row that is simply wrong, and a wrong row is
+   more expensive than a missing one. In
+   `TIGER2025/ADDR/tl_2025_02100_addr.zip` — Haines Borough, Alaska — the
+   address range `ARID 40027724370979` (`TLID 190961593`, `SIDE R`, house
+   numbers 401–499, on Allen Rd, alternately Menaker Rd) names `ZIP 81087`.
+   That is Vilas, Colorado, about 2,300 miles from Haines. It is the 192nd of
+   the 348 records in the `.dbf`, counting the first record as 1; a viewer that
+   counts the field header as a line calls it line 193.
+
+   The other 347 records agree with GeoNames or say nothing — 344 name 99827
+   and 3 name no ZIP Code — so this single row is the borough's only dissent.
+   Because a sole-ZIP-Code inference is refused on the first disagreement
+   (`internal/areazip`), the whole of Haines Borough loses it. That is
+   deliberate: we would rather give a caller no answer than a wrong one. It is
+   recorded here so the cost of the row is visible, and so it can be reported
+   to the Census Bureau.
