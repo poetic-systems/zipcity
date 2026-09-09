@@ -524,10 +524,25 @@ func readTigerfileIndexes(required []RequiredTigerfiles) (*tigerfileIndex, error
 			idx.areasByType[filetype] = areas
 		}
 
-		sourcefiles, err := downloadFtpIndex(req.Source.JoinPath(req.Path))
+		indexurl := req.Source.JoinPath(req.Path)
+		sourcefiles, err := downloadFtpIndex(indexurl)
 		if err != nil {
 			return nil, err
 		}
+
+		// An index naming no archive is a read that failed, not a directory
+		// the Census Bureau publishes nothing in: every required type covers
+		// areas. The absence check cannot see this, because it measures a
+		// type against the areas of its own granularity and a type with no
+		// areas has none, so an empty index reached the generator as a
+		// release with no counties in it. The archives are already verified
+		// against the page census.gov serves under HTTP 200 when it refuses
+		// a request; this is the same check one level up.
+		// See poetic-systems/zipcity#26.
+		if len(sourcefiles) == 0 {
+			return nil, fmt.Errorf("the index at %s lists no TIGER files", indexurl)
+		}
+
 		idx.files = append(idx.files, sourcefiles...)
 
 		for _, v := range sourcefiles {
@@ -623,6 +638,9 @@ func downloadFtpIndex(indexurl *url.URL) ([]*url.URL, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: %s", indexurl, resp.Status)
+	}
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read body: %w", err)
