@@ -140,6 +140,16 @@ are embedded via `go:embed` during the build process so they are both stored and
 distributed as efficiently as possible and readily available for use by the
 library immediately.
 
+The current version of this library is built from the US Census Bureau's TIGER
+files and Geonames postal code csv files. Where the Census Bureau has an address
+range with a Zip code, we associate it with the street names also associated
+with that range. If the street has an associated city (a place) we also use that
+association. Where these direct associations do not exist we infer them from
+shared faces, county level zip codes, and the city associated with the zip
+code's post office. While we have tried to be thorough and compensate for gaps
+and differences in the underlying data, it is expected that users will discover
+some errors.
+
 ## Building the Data
 
 Both of the data-producing steps in this repository are Go programs carrying
@@ -177,30 +187,24 @@ the compiled filters and the test fixtures are both committed.
 `internal/ustigerline/testdata/us_census_tiger/` that `ustigerline`'s tests
 read. It builds one connected slice of a single county — faces, then the edges
 they bound, then the names and address ranges for those edges — because the
-readers exist to follow the joins between the files, and a fixture that breaks
-a join tests nothing.
+readers exist to follow the joins between the files, and a fixture that breaks a
+join tests nothing.
 
 It reads from the same `./data/us_census_tiger/` cache and downloads nothing, so
 the county's files have to be there already.
 
-## Current Known Issues
+## Notable Mitigated Issues
 
-Because the current version of this library is built from the US Census Bureau's
-TIGER files, some street names don't appear in the current dataset. There are
-two known primary causes:
+1. At times TIGER files on the Census Bureau's FTP site return an error page with
+   a 200 status code instead of the listed TIGER file. Bloom filter generation
+   should fail if any index page or file fails in this manner.
 
-1. Several TIGER files on the Census Bureau's FTP site return an error page with
-   a 200 status code instead of the listed TIGER file. These files are:
-   - <https://www2.census.gov/geo/tiger/TIGER2025/EDGES/tl_2025_48239_edges.zip>
-   - <https://www2.census.gov/geo/tiger/TIGER2025/ADDR/tl_2025_13193_addr.zip>
-   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_21061_faces.zip>
-   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_21089_faces.zip>
-   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_13273_faces.zip>
-   - <https://www2.census.gov/geo/tiger/TIGER2025/FACES/tl_2025_42065_faces.zip>
-     Additionally, there are no address range files for the Marshal Islands and
-     the Northern Marianas Islands.
+2. There are no address range files for the Marshal Islands and the Northern
+   Marianas Islands. This is a deliberate choice by the Census Bureau because their
+   data does not support the files existing. We compensate for this with zip code
+   data from Geonames.
 
-2. A published file can carry a row that is simply wrong, and a wrong row is
+3. A published file can carry a row that is simply wrong, and a wrong row is
    more expensive than a missing one. In
    `TIGER2025/ADDR/tl_2025_02100_addr.zip` — Haines Borough, Alaska — the
    address range `ARID 40027724370979` (`TLID 190961593`, `SIDE R`, house

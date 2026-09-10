@@ -115,7 +115,10 @@ func main() {
 	// than the other way round.
 	for zip, places := range placesByZip {
 		for _, place := range places {
-			key := bloomkeys.KeyZipCity(zip, place.PlaceName)
+			key, err := bloomkeys.KeyZipCity(zip, place.PlaceName)
+			if err != nil {
+				panic(err)
+			}
 			_, found := zipCityData[key]
 			if !found {
 				zipCityData[key] = ZipCityTuple{
@@ -204,7 +207,10 @@ func main() {
 			// name rather than one.
 			for _, zip := range zips {
 				if len(cty) > 0 && len(zip) > 4 {
-					key := bloomkeys.KeyZipCity(zip, cty)
+					key, err := bloomkeys.KeyZipCity(zip, cty)
+					if err != nil {
+						panic(err)
+					}
 					_, found := zipCityData[key]
 					if !found {
 						zipCityData[key] = ZipCityTuple{
@@ -224,7 +230,10 @@ func main() {
 					// make sure we include the primary name as well as the alternative names
 					streetnames := append(side.Street.Alt, street)
 					for _, stname := range streetnames {
-						key := bloomkeys.KeyZipStreet(zip, stname)
+						key, err := bloomkeys.KeyZipStreet(zip, stname)
+						if err != nil {
+							panic(err)
+						}
 						_, found := scoped[key]
 						if !found {
 							scoped[key] = ZipStreetTuple{
@@ -242,7 +251,10 @@ func main() {
 				streetnames := append(side.Street.Alt, street)
 				for _, cityname := range postalcities {
 					for _, stname := range streetnames {
-						key := bloomkeys.KeyCityStateStreet(cityname, stateInfo.USPS, stname)
+						key, err := bloomkeys.KeyCityStateStreet(cityname, stateInfo.USPS, stname)
+						if err != nil {
+							panic(err)
+						}
 						_, found := cityStreetData[key]
 						if !found {
 							cityStreetData[key] = CityStreetTuple{
@@ -278,7 +290,7 @@ func main() {
 		numThisZip2Sreet := uint(len(streets))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nZS := numThisZip2Sreet + (numThisZip2Sreet >> 3)
-		streetFilter := bloom.NewWithEstimates(nZS, 0.01)
+		streetFilter := bloom.NewWithEstimates(nZS, 0.005)
 
 		for key := range streets {
 			streetFilter.Add([]byte(key))
@@ -304,7 +316,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nZC := numZip2City + (numZip2City >> 3)
-	cityFilter := bloom.NewWithEstimates(nZC, 0.01)
+	cityFilter := bloom.NewWithEstimates(nZC, 0.005)
 
 	for key := range zipCityData {
 		cityFilter.Add([]byte(key))
@@ -326,7 +338,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nCS := numCity2Street + (numCity2Street >> 3)
-	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.01)
+	cityStreetFilter := bloom.NewWithEstimates(nCS, 0.005)
 
 	for key := range cityStreetData {
 		cityStreetFilter.Add([]byte(key))
