@@ -103,9 +103,10 @@ var testData = []struct {
 		Street: "Chalan Tun Herman Pan",
 		// TODO: Addresses and roads in the Northern Mariana Islands might deserve a
 		// closer look. In particular, if someone puts "Saipan" as the city it
-		// is not going to work - but the USPS Zip Locale Detail.xls shows the
-		// "Physical City" field for 96950 as "Saipan" (though locale list a few
-		// different names.)
+		// is not going to work - but the
+		// [USPS Zip Locale Detail.xls](https://postalpro.usps.com/ZIP_Locale_Detail)
+		// shows the "Physical City" field for 96950 as "Saipan" (though the "Locale"
+		// lists a few different names.)
 		City:  "DanDan",
 		State: "MP",
 		Zip:   "96950",

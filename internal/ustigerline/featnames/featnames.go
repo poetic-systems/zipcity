@@ -13,6 +13,7 @@
 package featnames
 
 import (
+	"fmt"
 	"maps"
 	"strings"
 
@@ -35,6 +36,34 @@ var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	}
 })
 
+// The TIGER files seem to frequently code prefix types in Puerto Rico as
+// English even though Project US@ says that the prefix position is for
+// Spanish street types. It is relatively rare to have a English street type
+// in a prefix position so frequent occurances in Puerto Rico seem very strange.
+var spanishCollisions = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
+	collect := make(map[string][]FeatnameInfo)
+	for f := range featuretypes.All() {
+		c, ok := collect[f.Short]
+		if !ok {
+			c = make([]FeatnameInfo, 0)
+		}
+		c = append(c, f)
+		collect[f.Short] = c
+	}
+
+	for k, c := range collect {
+		if len(c) > 1 {
+			for _, f := range c {
+				if f.Spanish {
+					if !yield(k, f) {
+						return
+					}
+				}
+			}
+		}
+	}
+})
+
 var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	for s := range streetsuffixes.All() {
 		for _, a := range s.Alt {
@@ -47,6 +76,12 @@ var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 
 func Pub28FeatureName(attr map[string]any) string {
 	isSpanish := false
+	sfp, ok := attr["__STATEFP"]
+	if ok && sfp == "72" {
+		// 72 is Puerto Rico, default to Spanish
+		fmt.Printf("State FIPS code is 72 (Puerto Rico). Defaulting to Spanish.\n")
+		isSpanish = true
+	}
 
 	base := ""
 	// attr['NAME'] will contain the text between all prefix and suffix values
@@ -76,6 +111,17 @@ func Pub28FeatureName(attr map[string]any) string {
 	}
 	prefixInfo, ok := featnameMap[pt]
 	if ok && prefixInfo.Prefix {
+		// if sfp == "72" {
+		// 	// 72 is Puerto Rico - an English prefix should be very uncommon there because
+		// 	// the prefix position is proper in Spanish; an English word in that position
+		// 	// would just be confusing. Unfortunately, the TIGER files use the English
+		// 	// prefix type code frequently for these streets. So we are taking the liberty
+		// 	// of overriding them.
+		// 	c, ok := spanishCollisions[prefixInfo.Short]
+		// 	if ok {
+		// 		prefixInfo = c
+		// 	}
+		// }
 		if prefixInfo.Spanish {
 			isSpanish = true
 		}
@@ -149,6 +195,10 @@ func Pub28FeatureName(attr map[string]any) string {
 	// diacritical encodings in Puerto Rican/Spanish street records, which persist
 	// as literal strings in annual TIGER/Line roll-forwards.
 	base, _ = strings.CutPrefix(base, "Ó ")
+
+	if sfp == "72" && len(prefixtype) > 0 && !isSpanish {
+		fmt.Printf("(Spanish?: %t): %v\n", isSpanish, attr)
+	}
 
 	// The full concatenation order in TIGER files is:
 	//   Prefix Qualifier (e.g., Old, New)

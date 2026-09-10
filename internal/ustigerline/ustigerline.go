@@ -397,6 +397,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 	featnamesDbfPath := filepath.Join(storagedir, "featnames", fmt.Sprintf("%s_featnames.zip", fileprefix))
 	edgesShpPath := filepath.Join(storagedir, "edges", fmt.Sprintf("%s_edges.zip", fileprefix))
+	statefips := fileprefix[len(fileprefix)-5 : len(fileprefix)-3]
 
 	featnameIndex := make(map[string]*StreetInfo)
 
@@ -417,6 +418,16 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 			continue
 		}
 		tlid := fieldutil.AsString(rawTLID)
+		// Add the state FIPS code in to fields so we can use it to tell when
+		// we should prefer Spanish prefixes. Project US@ pg. 26 - a section
+		// specifically about Puerto Rico addresses - says
+		//   "Spanish street names generally have the suffix element preceding
+		//    the root street name, making ita prefix."
+		// We're taking that as license to override TIGER file coding that says
+		// the abbreviated prefix is English the majority of the time.
+		// NOTE: we're using the __ to indicate that we added this value to the
+		// record's fields.
+		fields["__STATEFP"] = statefips
 		fullname := strings.ToUpper(featnames.Pub28FeatureName(fields))
 
 		if tlid != "" && fullname != "" {
