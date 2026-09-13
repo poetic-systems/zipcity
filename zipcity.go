@@ -72,7 +72,12 @@ func CheckCityStateAndStreet(city, state, street string) (bool, error) {
 		return false, fmt.Errorf("street required")
 	}
 
-	f, err := compiled_filter.LoadFilter(compiled_filter.CityStreet)
+	filterId, err := compiled_filter.CityStreetFilterForState(state)
+	if err != nil {
+		return false, fmt.Errorf("Unable to identify bloom filter for state: %w", err)
+	}
+
+	f, err := compiled_filter.LoadFilter(filterId)
 	if err != nil {
 		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}

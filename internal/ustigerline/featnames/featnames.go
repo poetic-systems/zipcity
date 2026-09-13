@@ -32,20 +32,29 @@ var spanishPrefixOverrides = map[string]string{
 	"AVE": "AVENIDA",
 }
 
+// These exceptions often mean something else when they occur in the base street name
+// rather than a coded prefix or suffix type
+var basePartExceptions = []string{
+	"ST", // it often means Saint
+	"DR", // it often means Doctor
+}
+
 // FeatnameInfo is one Appendix D row. Rows are uppercase, as the whole of
 // addresstables is; the published table prints them in title case.
 type FeatnameInfo = featuretypes.FeatureType
 
 var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	for f := range featuretypes.All() {
-		// Enable lookup by Code, Short, and Full
 		if !yield(f.Code, f) {
 			return
 		}
+	}
+})
+
+var featnameShortMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
+	for f := range featuretypes.All() {
+		// Enable lookup by f.Short only
 		if !yield(f.Short, f) {
-			return
-		}
-		if !yield(f.Full, f) {
 			return
 		}
 	}
@@ -98,13 +107,17 @@ func Pub28FeatureName(attr map[string]any) string {
 	// as literal strings in annual TIGER/Line roll-forwards.
 	base, _ = strings.CutPrefix(base, "Ó ")
 
-	// in Puerto Rico especially the NAME may contain secondary "prefixes" that should
-	// be expanded per pub 28.
+	// The NAME may contain secondary "prefixes" that should be expanded per pub 28.
+	// However, examples like MT ST HELENS RD mean we have to be careful of certain collisions
 	baseparts := strings.Split(base, " ")
 	expandedbaseparts := slices.Collect(func(yield func(string) bool) {
 		for _, part := range baseparts {
 			v := part
-			info, ok := featnameMap[part]
+			if slices.Contains(basePartExceptions, v) {
+				// Skip the part because it often means something else when in the base street name
+				continue
+			}
+			info, ok := featnameShortMap[part]
 			if ok {
 				v = info.Full
 			}

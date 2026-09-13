@@ -1,11 +1,11 @@
-// DO NOT EDIT! Code generated at 2026-09-13T00:08:17Z by internal/bloomgenerator/bloomgenerator.go
+// DO NOT EDIT! Code generated at 2026-09-13T03:26:49Z by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
 import (
 	"bytes"
 	_ "embed"
-	"encoding/gob"
 	"fmt"
+	"io"
 	"regexp"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
@@ -37,7 +37,62 @@ type CompiledFilter string
 const (
 	Unrecognized CompiledFilter = ""
 	ZipCity      CompiledFilter = "zip-city"
-	CityStreet   CompiledFilter = "city-street"
+	CityStreetAK CompiledFilter = "city-street-AK"
+	CityStreetAL CompiledFilter = "city-street-AL"
+	CityStreetAR CompiledFilter = "city-street-AR"
+	CityStreetAS CompiledFilter = "city-street-AS"
+	CityStreetAZ CompiledFilter = "city-street-AZ"
+	CityStreetCA CompiledFilter = "city-street-CA"
+	CityStreetCO CompiledFilter = "city-street-CO"
+	CityStreetCT CompiledFilter = "city-street-CT"
+	CityStreetDC CompiledFilter = "city-street-DC"
+	CityStreetDE CompiledFilter = "city-street-DE"
+	CityStreetFL CompiledFilter = "city-street-FL"
+	CityStreetGA CompiledFilter = "city-street-GA"
+	CityStreetGU CompiledFilter = "city-street-GU"
+	CityStreetHI CompiledFilter = "city-street-HI"
+	CityStreetIA CompiledFilter = "city-street-IA"
+	CityStreetID CompiledFilter = "city-street-ID"
+	CityStreetIL CompiledFilter = "city-street-IL"
+	CityStreetIN CompiledFilter = "city-street-IN"
+	CityStreetKS CompiledFilter = "city-street-KS"
+	CityStreetKY CompiledFilter = "city-street-KY"
+	CityStreetLA CompiledFilter = "city-street-LA"
+	CityStreetMA CompiledFilter = "city-street-MA"
+	CityStreetMD CompiledFilter = "city-street-MD"
+	CityStreetME CompiledFilter = "city-street-ME"
+	CityStreetMI CompiledFilter = "city-street-MI"
+	CityStreetMN CompiledFilter = "city-street-MN"
+	CityStreetMO CompiledFilter = "city-street-MO"
+	CityStreetMP CompiledFilter = "city-street-MP"
+	CityStreetMS CompiledFilter = "city-street-MS"
+	CityStreetMT CompiledFilter = "city-street-MT"
+	CityStreetNC CompiledFilter = "city-street-NC"
+	CityStreetND CompiledFilter = "city-street-ND"
+	CityStreetNE CompiledFilter = "city-street-NE"
+	CityStreetNH CompiledFilter = "city-street-NH"
+	CityStreetNJ CompiledFilter = "city-street-NJ"
+	CityStreetNM CompiledFilter = "city-street-NM"
+	CityStreetNV CompiledFilter = "city-street-NV"
+	CityStreetNY CompiledFilter = "city-street-NY"
+	CityStreetOH CompiledFilter = "city-street-OH"
+	CityStreetOK CompiledFilter = "city-street-OK"
+	CityStreetOR CompiledFilter = "city-street-OR"
+	CityStreetPA CompiledFilter = "city-street-PA"
+	CityStreetPR CompiledFilter = "city-street-PR"
+	CityStreetRI CompiledFilter = "city-street-RI"
+	CityStreetSC CompiledFilter = "city-street-SC"
+	CityStreetSD CompiledFilter = "city-street-SD"
+	CityStreetTN CompiledFilter = "city-street-TN"
+	CityStreetTX CompiledFilter = "city-street-TX"
+	CityStreetUT CompiledFilter = "city-street-UT"
+	CityStreetVA CompiledFilter = "city-street-VA"
+	CityStreetVI CompiledFilter = "city-street-VI"
+	CityStreetVT CompiledFilter = "city-street-VT"
+	CityStreetWA CompiledFilter = "city-street-WA"
+	CityStreetWI CompiledFilter = "city-street-WI"
+	CityStreetWV CompiledFilter = "city-street-WV"
+	CityStreetWY CompiledFilter = "city-street-WY"
 	ZipStreet00  CompiledFilter = "zip-street-00"
 	ZipStreet01  CompiledFilter = "zip-street-01"
 	ZipStreet02  CompiledFilter = "zip-street-02"
@@ -139,6 +194,129 @@ const (
 	ZipStreet98  CompiledFilter = "zip-street-98"
 	ZipStreet99  CompiledFilter = "zip-street-99"
 )
+
+func CityStreetFilterForState(state string) (CompiledFilter, error) {
+	if len(state) != 2 {
+		return Unrecognized, fmt.Errorf("USPS state abbreviation required")
+	}
+
+	filterid := fmt.Sprintf("city-street-%s", state)
+	switch filterid {
+	case "city-street-AK":
+		return CityStreetAK, nil
+	case "city-street-AL":
+		return CityStreetAL, nil
+	case "city-street-AR":
+		return CityStreetAR, nil
+	case "city-street-AS":
+		return CityStreetAS, nil
+	case "city-street-AZ":
+		return CityStreetAZ, nil
+	case "city-street-CA":
+		return CityStreetCA, nil
+	case "city-street-CO":
+		return CityStreetCO, nil
+	case "city-street-CT":
+		return CityStreetCT, nil
+	case "city-street-DC":
+		return CityStreetDC, nil
+	case "city-street-DE":
+		return CityStreetDE, nil
+	case "city-street-FL":
+		return CityStreetFL, nil
+	case "city-street-GA":
+		return CityStreetGA, nil
+	case "city-street-GU":
+		return CityStreetGU, nil
+	case "city-street-HI":
+		return CityStreetHI, nil
+	case "city-street-IA":
+		return CityStreetIA, nil
+	case "city-street-ID":
+		return CityStreetID, nil
+	case "city-street-IL":
+		return CityStreetIL, nil
+	case "city-street-IN":
+		return CityStreetIN, nil
+	case "city-street-KS":
+		return CityStreetKS, nil
+	case "city-street-KY":
+		return CityStreetKY, nil
+	case "city-street-LA":
+		return CityStreetLA, nil
+	case "city-street-MA":
+		return CityStreetMA, nil
+	case "city-street-MD":
+		return CityStreetMD, nil
+	case "city-street-ME":
+		return CityStreetME, nil
+	case "city-street-MI":
+		return CityStreetMI, nil
+	case "city-street-MN":
+		return CityStreetMN, nil
+	case "city-street-MO":
+		return CityStreetMO, nil
+	case "city-street-MP":
+		return CityStreetMP, nil
+	case "city-street-MS":
+		return CityStreetMS, nil
+	case "city-street-MT":
+		return CityStreetMT, nil
+	case "city-street-NC":
+		return CityStreetNC, nil
+	case "city-street-ND":
+		return CityStreetND, nil
+	case "city-street-NE":
+		return CityStreetNE, nil
+	case "city-street-NH":
+		return CityStreetNH, nil
+	case "city-street-NJ":
+		return CityStreetNJ, nil
+	case "city-street-NM":
+		return CityStreetNM, nil
+	case "city-street-NV":
+		return CityStreetNV, nil
+	case "city-street-NY":
+		return CityStreetNY, nil
+	case "city-street-OH":
+		return CityStreetOH, nil
+	case "city-street-OK":
+		return CityStreetOK, nil
+	case "city-street-OR":
+		return CityStreetOR, nil
+	case "city-street-PA":
+		return CityStreetPA, nil
+	case "city-street-PR":
+		return CityStreetPR, nil
+	case "city-street-RI":
+		return CityStreetRI, nil
+	case "city-street-SC":
+		return CityStreetSC, nil
+	case "city-street-SD":
+		return CityStreetSD, nil
+	case "city-street-TN":
+		return CityStreetTN, nil
+	case "city-street-TX":
+		return CityStreetTX, nil
+	case "city-street-UT":
+		return CityStreetUT, nil
+	case "city-street-VA":
+		return CityStreetVA, nil
+	case "city-street-VI":
+		return CityStreetVI, nil
+	case "city-street-VT":
+		return CityStreetVT, nil
+	case "city-street-WA":
+		return CityStreetWA, nil
+	case "city-street-WI":
+		return CityStreetWI, nil
+	case "city-street-WV":
+		return CityStreetWV, nil
+	case "city-street-WY":
+		return CityStreetWY, nil
+	}
+	return Unrecognized, fmt.Errorf("USPS state abbreviation required")
+}
 
 func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
 	if !zip5pattern.MatchString(zip) {
@@ -353,222 +531,500 @@ func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
 
 // LoadFilter restores the compiled filter in memory
 func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
-	var filter bloom.BloomFilter
-	var buf *bytes.Buffer
+	filter := &bloom.BloomFilter{}
+	var reader io.Reader
 	switch name {
 	case ZipCity:
-		buf = bytes.NewBuffer(RawZipCityFilterBytes)
-	case CityStreet:
-		buf = bytes.NewBuffer(RawCityStreetFilterBytes)
+		reader = bytes.NewReader(RawZipCityFilterBytes)
+	case CityStreetAK:
+		reader = bytes.NewReader(RawCityStreetAKFilterBytes)
+	case CityStreetAL:
+		reader = bytes.NewReader(RawCityStreetALFilterBytes)
+	case CityStreetAR:
+		reader = bytes.NewReader(RawCityStreetARFilterBytes)
+	case CityStreetAS:
+		reader = bytes.NewReader(RawCityStreetASFilterBytes)
+	case CityStreetAZ:
+		reader = bytes.NewReader(RawCityStreetAZFilterBytes)
+	case CityStreetCA:
+		reader = bytes.NewReader(RawCityStreetCAFilterBytes)
+	case CityStreetCO:
+		reader = bytes.NewReader(RawCityStreetCOFilterBytes)
+	case CityStreetCT:
+		reader = bytes.NewReader(RawCityStreetCTFilterBytes)
+	case CityStreetDC:
+		reader = bytes.NewReader(RawCityStreetDCFilterBytes)
+	case CityStreetDE:
+		reader = bytes.NewReader(RawCityStreetDEFilterBytes)
+	case CityStreetFL:
+		reader = bytes.NewReader(RawCityStreetFLFilterBytes)
+	case CityStreetGA:
+		reader = bytes.NewReader(RawCityStreetGAFilterBytes)
+	case CityStreetGU:
+		reader = bytes.NewReader(RawCityStreetGUFilterBytes)
+	case CityStreetHI:
+		reader = bytes.NewReader(RawCityStreetHIFilterBytes)
+	case CityStreetIA:
+		reader = bytes.NewReader(RawCityStreetIAFilterBytes)
+	case CityStreetID:
+		reader = bytes.NewReader(RawCityStreetIDFilterBytes)
+	case CityStreetIL:
+		reader = bytes.NewReader(RawCityStreetILFilterBytes)
+	case CityStreetIN:
+		reader = bytes.NewReader(RawCityStreetINFilterBytes)
+	case CityStreetKS:
+		reader = bytes.NewReader(RawCityStreetKSFilterBytes)
+	case CityStreetKY:
+		reader = bytes.NewReader(RawCityStreetKYFilterBytes)
+	case CityStreetLA:
+		reader = bytes.NewReader(RawCityStreetLAFilterBytes)
+	case CityStreetMA:
+		reader = bytes.NewReader(RawCityStreetMAFilterBytes)
+	case CityStreetMD:
+		reader = bytes.NewReader(RawCityStreetMDFilterBytes)
+	case CityStreetME:
+		reader = bytes.NewReader(RawCityStreetMEFilterBytes)
+	case CityStreetMI:
+		reader = bytes.NewReader(RawCityStreetMIFilterBytes)
+	case CityStreetMN:
+		reader = bytes.NewReader(RawCityStreetMNFilterBytes)
+	case CityStreetMO:
+		reader = bytes.NewReader(RawCityStreetMOFilterBytes)
+	case CityStreetMP:
+		reader = bytes.NewReader(RawCityStreetMPFilterBytes)
+	case CityStreetMS:
+		reader = bytes.NewReader(RawCityStreetMSFilterBytes)
+	case CityStreetMT:
+		reader = bytes.NewReader(RawCityStreetMTFilterBytes)
+	case CityStreetNC:
+		reader = bytes.NewReader(RawCityStreetNCFilterBytes)
+	case CityStreetND:
+		reader = bytes.NewReader(RawCityStreetNDFilterBytes)
+	case CityStreetNE:
+		reader = bytes.NewReader(RawCityStreetNEFilterBytes)
+	case CityStreetNH:
+		reader = bytes.NewReader(RawCityStreetNHFilterBytes)
+	case CityStreetNJ:
+		reader = bytes.NewReader(RawCityStreetNJFilterBytes)
+	case CityStreetNM:
+		reader = bytes.NewReader(RawCityStreetNMFilterBytes)
+	case CityStreetNV:
+		reader = bytes.NewReader(RawCityStreetNVFilterBytes)
+	case CityStreetNY:
+		reader = bytes.NewReader(RawCityStreetNYFilterBytes)
+	case CityStreetOH:
+		reader = bytes.NewReader(RawCityStreetOHFilterBytes)
+	case CityStreetOK:
+		reader = bytes.NewReader(RawCityStreetOKFilterBytes)
+	case CityStreetOR:
+		reader = bytes.NewReader(RawCityStreetORFilterBytes)
+	case CityStreetPA:
+		reader = bytes.NewReader(RawCityStreetPAFilterBytes)
+	case CityStreetPR:
+		reader = bytes.NewReader(RawCityStreetPRFilterBytes)
+	case CityStreetRI:
+		reader = bytes.NewReader(RawCityStreetRIFilterBytes)
+	case CityStreetSC:
+		reader = bytes.NewReader(RawCityStreetSCFilterBytes)
+	case CityStreetSD:
+		reader = bytes.NewReader(RawCityStreetSDFilterBytes)
+	case CityStreetTN:
+		reader = bytes.NewReader(RawCityStreetTNFilterBytes)
+	case CityStreetTX:
+		reader = bytes.NewReader(RawCityStreetTXFilterBytes)
+	case CityStreetUT:
+		reader = bytes.NewReader(RawCityStreetUTFilterBytes)
+	case CityStreetVA:
+		reader = bytes.NewReader(RawCityStreetVAFilterBytes)
+	case CityStreetVI:
+		reader = bytes.NewReader(RawCityStreetVIFilterBytes)
+	case CityStreetVT:
+		reader = bytes.NewReader(RawCityStreetVTFilterBytes)
+	case CityStreetWA:
+		reader = bytes.NewReader(RawCityStreetWAFilterBytes)
+	case CityStreetWI:
+		reader = bytes.NewReader(RawCityStreetWIFilterBytes)
+	case CityStreetWV:
+		reader = bytes.NewReader(RawCityStreetWVFilterBytes)
+	case CityStreetWY:
+		reader = bytes.NewReader(RawCityStreetWYFilterBytes)
 	case ZipStreet00:
-		buf = bytes.NewBuffer(RawZipStreet00FilterBytes)
+		reader = bytes.NewReader(RawZipStreet00FilterBytes)
 	case ZipStreet01:
-		buf = bytes.NewBuffer(RawZipStreet01FilterBytes)
+		reader = bytes.NewReader(RawZipStreet01FilterBytes)
 	case ZipStreet02:
-		buf = bytes.NewBuffer(RawZipStreet02FilterBytes)
+		reader = bytes.NewReader(RawZipStreet02FilterBytes)
 	case ZipStreet03:
-		buf = bytes.NewBuffer(RawZipStreet03FilterBytes)
+		reader = bytes.NewReader(RawZipStreet03FilterBytes)
 	case ZipStreet04:
-		buf = bytes.NewBuffer(RawZipStreet04FilterBytes)
+		reader = bytes.NewReader(RawZipStreet04FilterBytes)
 	case ZipStreet05:
-		buf = bytes.NewBuffer(RawZipStreet05FilterBytes)
+		reader = bytes.NewReader(RawZipStreet05FilterBytes)
 	case ZipStreet06:
-		buf = bytes.NewBuffer(RawZipStreet06FilterBytes)
+		reader = bytes.NewReader(RawZipStreet06FilterBytes)
 	case ZipStreet07:
-		buf = bytes.NewBuffer(RawZipStreet07FilterBytes)
+		reader = bytes.NewReader(RawZipStreet07FilterBytes)
 	case ZipStreet08:
-		buf = bytes.NewBuffer(RawZipStreet08FilterBytes)
+		reader = bytes.NewReader(RawZipStreet08FilterBytes)
 	case ZipStreet09:
-		buf = bytes.NewBuffer(RawZipStreet09FilterBytes)
+		reader = bytes.NewReader(RawZipStreet09FilterBytes)
 	case ZipStreet10:
-		buf = bytes.NewBuffer(RawZipStreet10FilterBytes)
+		reader = bytes.NewReader(RawZipStreet10FilterBytes)
 	case ZipStreet11:
-		buf = bytes.NewBuffer(RawZipStreet11FilterBytes)
+		reader = bytes.NewReader(RawZipStreet11FilterBytes)
 	case ZipStreet12:
-		buf = bytes.NewBuffer(RawZipStreet12FilterBytes)
+		reader = bytes.NewReader(RawZipStreet12FilterBytes)
 	case ZipStreet13:
-		buf = bytes.NewBuffer(RawZipStreet13FilterBytes)
+		reader = bytes.NewReader(RawZipStreet13FilterBytes)
 	case ZipStreet14:
-		buf = bytes.NewBuffer(RawZipStreet14FilterBytes)
+		reader = bytes.NewReader(RawZipStreet14FilterBytes)
 	case ZipStreet15:
-		buf = bytes.NewBuffer(RawZipStreet15FilterBytes)
+		reader = bytes.NewReader(RawZipStreet15FilterBytes)
 	case ZipStreet16:
-		buf = bytes.NewBuffer(RawZipStreet16FilterBytes)
+		reader = bytes.NewReader(RawZipStreet16FilterBytes)
 	case ZipStreet17:
-		buf = bytes.NewBuffer(RawZipStreet17FilterBytes)
+		reader = bytes.NewReader(RawZipStreet17FilterBytes)
 	case ZipStreet18:
-		buf = bytes.NewBuffer(RawZipStreet18FilterBytes)
+		reader = bytes.NewReader(RawZipStreet18FilterBytes)
 	case ZipStreet19:
-		buf = bytes.NewBuffer(RawZipStreet19FilterBytes)
+		reader = bytes.NewReader(RawZipStreet19FilterBytes)
 	case ZipStreet20:
-		buf = bytes.NewBuffer(RawZipStreet20FilterBytes)
+		reader = bytes.NewReader(RawZipStreet20FilterBytes)
 	case ZipStreet21:
-		buf = bytes.NewBuffer(RawZipStreet21FilterBytes)
+		reader = bytes.NewReader(RawZipStreet21FilterBytes)
 	case ZipStreet22:
-		buf = bytes.NewBuffer(RawZipStreet22FilterBytes)
+		reader = bytes.NewReader(RawZipStreet22FilterBytes)
 	case ZipStreet23:
-		buf = bytes.NewBuffer(RawZipStreet23FilterBytes)
+		reader = bytes.NewReader(RawZipStreet23FilterBytes)
 	case ZipStreet24:
-		buf = bytes.NewBuffer(RawZipStreet24FilterBytes)
+		reader = bytes.NewReader(RawZipStreet24FilterBytes)
 	case ZipStreet25:
-		buf = bytes.NewBuffer(RawZipStreet25FilterBytes)
+		reader = bytes.NewReader(RawZipStreet25FilterBytes)
 	case ZipStreet26:
-		buf = bytes.NewBuffer(RawZipStreet26FilterBytes)
+		reader = bytes.NewReader(RawZipStreet26FilterBytes)
 	case ZipStreet27:
-		buf = bytes.NewBuffer(RawZipStreet27FilterBytes)
+		reader = bytes.NewReader(RawZipStreet27FilterBytes)
 	case ZipStreet28:
-		buf = bytes.NewBuffer(RawZipStreet28FilterBytes)
+		reader = bytes.NewReader(RawZipStreet28FilterBytes)
 	case ZipStreet29:
-		buf = bytes.NewBuffer(RawZipStreet29FilterBytes)
+		reader = bytes.NewReader(RawZipStreet29FilterBytes)
 	case ZipStreet30:
-		buf = bytes.NewBuffer(RawZipStreet30FilterBytes)
+		reader = bytes.NewReader(RawZipStreet30FilterBytes)
 	case ZipStreet31:
-		buf = bytes.NewBuffer(RawZipStreet31FilterBytes)
+		reader = bytes.NewReader(RawZipStreet31FilterBytes)
 	case ZipStreet32:
-		buf = bytes.NewBuffer(RawZipStreet32FilterBytes)
+		reader = bytes.NewReader(RawZipStreet32FilterBytes)
 	case ZipStreet33:
-		buf = bytes.NewBuffer(RawZipStreet33FilterBytes)
+		reader = bytes.NewReader(RawZipStreet33FilterBytes)
 	case ZipStreet34:
-		buf = bytes.NewBuffer(RawZipStreet34FilterBytes)
+		reader = bytes.NewReader(RawZipStreet34FilterBytes)
 	case ZipStreet35:
-		buf = bytes.NewBuffer(RawZipStreet35FilterBytes)
+		reader = bytes.NewReader(RawZipStreet35FilterBytes)
 	case ZipStreet36:
-		buf = bytes.NewBuffer(RawZipStreet36FilterBytes)
+		reader = bytes.NewReader(RawZipStreet36FilterBytes)
 	case ZipStreet37:
-		buf = bytes.NewBuffer(RawZipStreet37FilterBytes)
+		reader = bytes.NewReader(RawZipStreet37FilterBytes)
 	case ZipStreet38:
-		buf = bytes.NewBuffer(RawZipStreet38FilterBytes)
+		reader = bytes.NewReader(RawZipStreet38FilterBytes)
 	case ZipStreet39:
-		buf = bytes.NewBuffer(RawZipStreet39FilterBytes)
+		reader = bytes.NewReader(RawZipStreet39FilterBytes)
 	case ZipStreet40:
-		buf = bytes.NewBuffer(RawZipStreet40FilterBytes)
+		reader = bytes.NewReader(RawZipStreet40FilterBytes)
 	case ZipStreet41:
-		buf = bytes.NewBuffer(RawZipStreet41FilterBytes)
+		reader = bytes.NewReader(RawZipStreet41FilterBytes)
 	case ZipStreet42:
-		buf = bytes.NewBuffer(RawZipStreet42FilterBytes)
+		reader = bytes.NewReader(RawZipStreet42FilterBytes)
 	case ZipStreet43:
-		buf = bytes.NewBuffer(RawZipStreet43FilterBytes)
+		reader = bytes.NewReader(RawZipStreet43FilterBytes)
 	case ZipStreet44:
-		buf = bytes.NewBuffer(RawZipStreet44FilterBytes)
+		reader = bytes.NewReader(RawZipStreet44FilterBytes)
 	case ZipStreet45:
-		buf = bytes.NewBuffer(RawZipStreet45FilterBytes)
+		reader = bytes.NewReader(RawZipStreet45FilterBytes)
 	case ZipStreet46:
-		buf = bytes.NewBuffer(RawZipStreet46FilterBytes)
+		reader = bytes.NewReader(RawZipStreet46FilterBytes)
 	case ZipStreet47:
-		buf = bytes.NewBuffer(RawZipStreet47FilterBytes)
+		reader = bytes.NewReader(RawZipStreet47FilterBytes)
 	case ZipStreet48:
-		buf = bytes.NewBuffer(RawZipStreet48FilterBytes)
+		reader = bytes.NewReader(RawZipStreet48FilterBytes)
 	case ZipStreet49:
-		buf = bytes.NewBuffer(RawZipStreet49FilterBytes)
+		reader = bytes.NewReader(RawZipStreet49FilterBytes)
 	case ZipStreet50:
-		buf = bytes.NewBuffer(RawZipStreet50FilterBytes)
+		reader = bytes.NewReader(RawZipStreet50FilterBytes)
 	case ZipStreet51:
-		buf = bytes.NewBuffer(RawZipStreet51FilterBytes)
+		reader = bytes.NewReader(RawZipStreet51FilterBytes)
 	case ZipStreet52:
-		buf = bytes.NewBuffer(RawZipStreet52FilterBytes)
+		reader = bytes.NewReader(RawZipStreet52FilterBytes)
 	case ZipStreet53:
-		buf = bytes.NewBuffer(RawZipStreet53FilterBytes)
+		reader = bytes.NewReader(RawZipStreet53FilterBytes)
 	case ZipStreet54:
-		buf = bytes.NewBuffer(RawZipStreet54FilterBytes)
+		reader = bytes.NewReader(RawZipStreet54FilterBytes)
 	case ZipStreet55:
-		buf = bytes.NewBuffer(RawZipStreet55FilterBytes)
+		reader = bytes.NewReader(RawZipStreet55FilterBytes)
 	case ZipStreet56:
-		buf = bytes.NewBuffer(RawZipStreet56FilterBytes)
+		reader = bytes.NewReader(RawZipStreet56FilterBytes)
 	case ZipStreet57:
-		buf = bytes.NewBuffer(RawZipStreet57FilterBytes)
+		reader = bytes.NewReader(RawZipStreet57FilterBytes)
 	case ZipStreet58:
-		buf = bytes.NewBuffer(RawZipStreet58FilterBytes)
+		reader = bytes.NewReader(RawZipStreet58FilterBytes)
 	case ZipStreet59:
-		buf = bytes.NewBuffer(RawZipStreet59FilterBytes)
+		reader = bytes.NewReader(RawZipStreet59FilterBytes)
 	case ZipStreet60:
-		buf = bytes.NewBuffer(RawZipStreet60FilterBytes)
+		reader = bytes.NewReader(RawZipStreet60FilterBytes)
 	case ZipStreet61:
-		buf = bytes.NewBuffer(RawZipStreet61FilterBytes)
+		reader = bytes.NewReader(RawZipStreet61FilterBytes)
 	case ZipStreet62:
-		buf = bytes.NewBuffer(RawZipStreet62FilterBytes)
+		reader = bytes.NewReader(RawZipStreet62FilterBytes)
 	case ZipStreet63:
-		buf = bytes.NewBuffer(RawZipStreet63FilterBytes)
+		reader = bytes.NewReader(RawZipStreet63FilterBytes)
 	case ZipStreet64:
-		buf = bytes.NewBuffer(RawZipStreet64FilterBytes)
+		reader = bytes.NewReader(RawZipStreet64FilterBytes)
 	case ZipStreet65:
-		buf = bytes.NewBuffer(RawZipStreet65FilterBytes)
+		reader = bytes.NewReader(RawZipStreet65FilterBytes)
 	case ZipStreet66:
-		buf = bytes.NewBuffer(RawZipStreet66FilterBytes)
+		reader = bytes.NewReader(RawZipStreet66FilterBytes)
 	case ZipStreet67:
-		buf = bytes.NewBuffer(RawZipStreet67FilterBytes)
+		reader = bytes.NewReader(RawZipStreet67FilterBytes)
 	case ZipStreet68:
-		buf = bytes.NewBuffer(RawZipStreet68FilterBytes)
+		reader = bytes.NewReader(RawZipStreet68FilterBytes)
 	case ZipStreet69:
-		buf = bytes.NewBuffer(RawZipStreet69FilterBytes)
+		reader = bytes.NewReader(RawZipStreet69FilterBytes)
 	case ZipStreet70:
-		buf = bytes.NewBuffer(RawZipStreet70FilterBytes)
+		reader = bytes.NewReader(RawZipStreet70FilterBytes)
 	case ZipStreet71:
-		buf = bytes.NewBuffer(RawZipStreet71FilterBytes)
+		reader = bytes.NewReader(RawZipStreet71FilterBytes)
 	case ZipStreet72:
-		buf = bytes.NewBuffer(RawZipStreet72FilterBytes)
+		reader = bytes.NewReader(RawZipStreet72FilterBytes)
 	case ZipStreet73:
-		buf = bytes.NewBuffer(RawZipStreet73FilterBytes)
+		reader = bytes.NewReader(RawZipStreet73FilterBytes)
 	case ZipStreet74:
-		buf = bytes.NewBuffer(RawZipStreet74FilterBytes)
+		reader = bytes.NewReader(RawZipStreet74FilterBytes)
 	case ZipStreet75:
-		buf = bytes.NewBuffer(RawZipStreet75FilterBytes)
+		reader = bytes.NewReader(RawZipStreet75FilterBytes)
 	case ZipStreet76:
-		buf = bytes.NewBuffer(RawZipStreet76FilterBytes)
+		reader = bytes.NewReader(RawZipStreet76FilterBytes)
 	case ZipStreet77:
-		buf = bytes.NewBuffer(RawZipStreet77FilterBytes)
+		reader = bytes.NewReader(RawZipStreet77FilterBytes)
 	case ZipStreet78:
-		buf = bytes.NewBuffer(RawZipStreet78FilterBytes)
+		reader = bytes.NewReader(RawZipStreet78FilterBytes)
 	case ZipStreet79:
-		buf = bytes.NewBuffer(RawZipStreet79FilterBytes)
+		reader = bytes.NewReader(RawZipStreet79FilterBytes)
 	case ZipStreet80:
-		buf = bytes.NewBuffer(RawZipStreet80FilterBytes)
+		reader = bytes.NewReader(RawZipStreet80FilterBytes)
 	case ZipStreet81:
-		buf = bytes.NewBuffer(RawZipStreet81FilterBytes)
+		reader = bytes.NewReader(RawZipStreet81FilterBytes)
 	case ZipStreet82:
-		buf = bytes.NewBuffer(RawZipStreet82FilterBytes)
+		reader = bytes.NewReader(RawZipStreet82FilterBytes)
 	case ZipStreet83:
-		buf = bytes.NewBuffer(RawZipStreet83FilterBytes)
+		reader = bytes.NewReader(RawZipStreet83FilterBytes)
 	case ZipStreet84:
-		buf = bytes.NewBuffer(RawZipStreet84FilterBytes)
+		reader = bytes.NewReader(RawZipStreet84FilterBytes)
 	case ZipStreet85:
-		buf = bytes.NewBuffer(RawZipStreet85FilterBytes)
+		reader = bytes.NewReader(RawZipStreet85FilterBytes)
 	case ZipStreet86:
-		buf = bytes.NewBuffer(RawZipStreet86FilterBytes)
+		reader = bytes.NewReader(RawZipStreet86FilterBytes)
 	case ZipStreet87:
-		buf = bytes.NewBuffer(RawZipStreet87FilterBytes)
+		reader = bytes.NewReader(RawZipStreet87FilterBytes)
 	case ZipStreet88:
-		buf = bytes.NewBuffer(RawZipStreet88FilterBytes)
+		reader = bytes.NewReader(RawZipStreet88FilterBytes)
 	case ZipStreet89:
-		buf = bytes.NewBuffer(RawZipStreet89FilterBytes)
+		reader = bytes.NewReader(RawZipStreet89FilterBytes)
 	case ZipStreet90:
-		buf = bytes.NewBuffer(RawZipStreet90FilterBytes)
+		reader = bytes.NewReader(RawZipStreet90FilterBytes)
 	case ZipStreet91:
-		buf = bytes.NewBuffer(RawZipStreet91FilterBytes)
+		reader = bytes.NewReader(RawZipStreet91FilterBytes)
 	case ZipStreet92:
-		buf = bytes.NewBuffer(RawZipStreet92FilterBytes)
+		reader = bytes.NewReader(RawZipStreet92FilterBytes)
 	case ZipStreet93:
-		buf = bytes.NewBuffer(RawZipStreet93FilterBytes)
+		reader = bytes.NewReader(RawZipStreet93FilterBytes)
 	case ZipStreet94:
-		buf = bytes.NewBuffer(RawZipStreet94FilterBytes)
+		reader = bytes.NewReader(RawZipStreet94FilterBytes)
 	case ZipStreet95:
-		buf = bytes.NewBuffer(RawZipStreet95FilterBytes)
+		reader = bytes.NewReader(RawZipStreet95FilterBytes)
 	case ZipStreet96:
-		buf = bytes.NewBuffer(RawZipStreet96FilterBytes)
+		reader = bytes.NewReader(RawZipStreet96FilterBytes)
 	case ZipStreet97:
-		buf = bytes.NewBuffer(RawZipStreet97FilterBytes)
+		reader = bytes.NewReader(RawZipStreet97FilterBytes)
 	case ZipStreet98:
-		buf = bytes.NewBuffer(RawZipStreet98FilterBytes)
+		reader = bytes.NewReader(RawZipStreet98FilterBytes)
 	case ZipStreet99:
-		buf = bytes.NewBuffer(RawZipStreet99FilterBytes)
+		reader = bytes.NewReader(RawZipStreet99FilterBytes)
 	default:
 		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
 	}
-	decoder := gob.NewDecoder(buf)
-	if err := decoder.Decode(&filter); err != nil {
-		return nil, err
+	_, err := filter.ReadFrom(reader)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read %s bloom filter: %w", name, err)
 	}
-	return &filter, nil
+	return filter, nil
 }
+
+//go:embed city-street-AK.bin
+var RawCityStreetAKFilterBytes []byte
+
+//go:embed city-street-AL.bin
+var RawCityStreetALFilterBytes []byte
+
+//go:embed city-street-AR.bin
+var RawCityStreetARFilterBytes []byte
+
+//go:embed city-street-AS.bin
+var RawCityStreetASFilterBytes []byte
+
+//go:embed city-street-AZ.bin
+var RawCityStreetAZFilterBytes []byte
+
+//go:embed city-street-CA.bin
+var RawCityStreetCAFilterBytes []byte
+
+//go:embed city-street-CO.bin
+var RawCityStreetCOFilterBytes []byte
+
+//go:embed city-street-CT.bin
+var RawCityStreetCTFilterBytes []byte
+
+//go:embed city-street-DC.bin
+var RawCityStreetDCFilterBytes []byte
+
+//go:embed city-street-DE.bin
+var RawCityStreetDEFilterBytes []byte
+
+//go:embed city-street-FL.bin
+var RawCityStreetFLFilterBytes []byte
+
+//go:embed city-street-GA.bin
+var RawCityStreetGAFilterBytes []byte
+
+//go:embed city-street-GU.bin
+var RawCityStreetGUFilterBytes []byte
+
+//go:embed city-street-HI.bin
+var RawCityStreetHIFilterBytes []byte
+
+//go:embed city-street-IA.bin
+var RawCityStreetIAFilterBytes []byte
+
+//go:embed city-street-ID.bin
+var RawCityStreetIDFilterBytes []byte
+
+//go:embed city-street-IL.bin
+var RawCityStreetILFilterBytes []byte
+
+//go:embed city-street-IN.bin
+var RawCityStreetINFilterBytes []byte
+
+//go:embed city-street-KS.bin
+var RawCityStreetKSFilterBytes []byte
+
+//go:embed city-street-KY.bin
+var RawCityStreetKYFilterBytes []byte
+
+//go:embed city-street-LA.bin
+var RawCityStreetLAFilterBytes []byte
+
+//go:embed city-street-MA.bin
+var RawCityStreetMAFilterBytes []byte
+
+//go:embed city-street-MD.bin
+var RawCityStreetMDFilterBytes []byte
+
+//go:embed city-street-ME.bin
+var RawCityStreetMEFilterBytes []byte
+
+//go:embed city-street-MI.bin
+var RawCityStreetMIFilterBytes []byte
+
+//go:embed city-street-MN.bin
+var RawCityStreetMNFilterBytes []byte
+
+//go:embed city-street-MO.bin
+var RawCityStreetMOFilterBytes []byte
+
+//go:embed city-street-MP.bin
+var RawCityStreetMPFilterBytes []byte
+
+//go:embed city-street-MS.bin
+var RawCityStreetMSFilterBytes []byte
+
+//go:embed city-street-MT.bin
+var RawCityStreetMTFilterBytes []byte
+
+//go:embed city-street-NC.bin
+var RawCityStreetNCFilterBytes []byte
+
+//go:embed city-street-ND.bin
+var RawCityStreetNDFilterBytes []byte
+
+//go:embed city-street-NE.bin
+var RawCityStreetNEFilterBytes []byte
+
+//go:embed city-street-NH.bin
+var RawCityStreetNHFilterBytes []byte
+
+//go:embed city-street-NJ.bin
+var RawCityStreetNJFilterBytes []byte
+
+//go:embed city-street-NM.bin
+var RawCityStreetNMFilterBytes []byte
+
+//go:embed city-street-NV.bin
+var RawCityStreetNVFilterBytes []byte
+
+//go:embed city-street-NY.bin
+var RawCityStreetNYFilterBytes []byte
+
+//go:embed city-street-OH.bin
+var RawCityStreetOHFilterBytes []byte
+
+//go:embed city-street-OK.bin
+var RawCityStreetOKFilterBytes []byte
+
+//go:embed city-street-OR.bin
+var RawCityStreetORFilterBytes []byte
+
+//go:embed city-street-PA.bin
+var RawCityStreetPAFilterBytes []byte
+
+//go:embed city-street-PR.bin
+var RawCityStreetPRFilterBytes []byte
+
+//go:embed city-street-RI.bin
+var RawCityStreetRIFilterBytes []byte
+
+//go:embed city-street-SC.bin
+var RawCityStreetSCFilterBytes []byte
+
+//go:embed city-street-SD.bin
+var RawCityStreetSDFilterBytes []byte
+
+//go:embed city-street-TN.bin
+var RawCityStreetTNFilterBytes []byte
+
+//go:embed city-street-TX.bin
+var RawCityStreetTXFilterBytes []byte
+
+//go:embed city-street-UT.bin
+var RawCityStreetUTFilterBytes []byte
+
+//go:embed city-street-VA.bin
+var RawCityStreetVAFilterBytes []byte
+
+//go:embed city-street-VI.bin
+var RawCityStreetVIFilterBytes []byte
+
+//go:embed city-street-VT.bin
+var RawCityStreetVTFilterBytes []byte
+
+//go:embed city-street-WA.bin
+var RawCityStreetWAFilterBytes []byte
+
+//go:embed city-street-WI.bin
+var RawCityStreetWIFilterBytes []byte
+
+//go:embed city-street-WV.bin
+var RawCityStreetWVFilterBytes []byte
+
+//go:embed city-street-WY.bin
+var RawCityStreetWYFilterBytes []byte
 
 //go:embed zip-street-00.bin
 var RawZipStreet00FilterBytes []byte
@@ -874,8 +1330,3 @@ var RawZipStreet99FilterBytes []byte
 //
 //go:embed zip-city.bin
 var RawZipCityFilterBytes []byte
-
-// RawCityStreetFilterBytes holds the pre-compiled city-street Bloom filter
-//
-//go:embed city-street.bin
-var RawCityStreetFilterBytes []byte
