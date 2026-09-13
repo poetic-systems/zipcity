@@ -13,8 +13,9 @@
 package featnames
 
 import (
-	"fmt"
 	"maps"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/poetic-systems/addresstables/streetsuffixes"
@@ -24,42 +25,28 @@ import (
 	"github.com/poetic-systems/zipcity/internal/ustigerline/qualifiers"
 )
 
+// We want to look for indicators of a Spanish street name
+var spanishMarkerRegex = regexp.MustCompile(`\b(de|del|de\s+las|de\s+los|san|santa|don|doña|villa|plaza)\b`)
+
+var spanishPrefixOverrides = map[string]string{
+	"AVE": "AVENIDA",
+}
+
 // FeatnameInfo is one Appendix D row. Rows are uppercase, as the whole of
 // addresstables is; the published table prints them in title case.
 type FeatnameInfo = featuretypes.FeatureType
 
 var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	for f := range featuretypes.All() {
+		// Enable lookup by Code, Short, and Full
 		if !yield(f.Code, f) {
 			return
 		}
-	}
-})
-
-// The TIGER files seem to frequently code prefix types in Puerto Rico as
-// English even though Project US@ says that the prefix position is for
-// Spanish street types. It is relatively rare to have a English street type
-// in a prefix position so frequent occurances in Puerto Rico seem very strange.
-var spanishCollisions = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
-	collect := make(map[string][]FeatnameInfo)
-	for f := range featuretypes.All() {
-		c, ok := collect[f.Short]
-		if !ok {
-			c = make([]FeatnameInfo, 0)
+		if !yield(f.Short, f) {
+			return
 		}
-		c = append(c, f)
-		collect[f.Short] = c
-	}
-
-	for k, c := range collect {
-		if len(c) > 1 {
-			for _, f := range c {
-				if f.Spanish {
-					if !yield(k, f) {
-						return
-					}
-				}
-			}
+		if !yield(f.Full, f) {
+			return
 		}
 	}
 })
@@ -74,14 +61,23 @@ var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	}
 })
 
-func Pub28FeatureName(attr map[string]any) string {
-	isSpanish := false
-	sfp, ok := attr["__STATEFP"]
-	if ok && sfp == "72" {
-		// 72 is Puerto Rico, default to Spanish
-		fmt.Printf("State FIPS code is 72 (Puerto Rico). Defaulting to Spanish.\n")
-		isSpanish = true
+func ApplySpanishPrefixOverrides(prefix string, full string, defaultSpanish bool) (string, bool) {
+	// In Puerto Rico, where the legal language for street names is Spanish, we can assume
+	// that an English prefix that collides with a Spanish one is a data ingestion error.
+	// Otherwise, as a special case for "AVE", we check the rest of the street name text to
+	// see if it looks like Spanish.
+	if defaultSpanish || (prefix == "AVE" && spanishMarkerRegex.MatchString(full)) {
+		spanish, ok := spanishPrefixOverrides[prefix]
+		if ok {
+			return spanish, true
+		}
 	}
+	return prefix, false
+}
+
+func Pub28FeatureName(attr map[string]any) string {
+	rawsfp, ok := attr["__STATEFP"]
+	sfp := fieldutil.AsString(rawsfp)
 
 	base := ""
 	// attr['NAME'] will contain the text between all prefix and suffix values
@@ -90,6 +86,34 @@ func Pub28FeatureName(attr map[string]any) string {
 		base = fieldutil.AsString(rawname)
 	}
 	base = strings.ToUpper(base)
+
+	// According to USPS Pub 28 Puerto Rican addresses begin with the street type.
+	// Additionally, directional prefixes are noted as rare (and "Ó " is not a
+	// valid directional prefix.)
+	// https://www2.census.gov/geo/tiger/rd_2ktiger/tgrrd2k.pdf lists "Ó" as one
+	// of the characters that it previously used square brackets to indicate.
+	// On that basis, the roughly 77 street records in puerto rico starting with
+	// "Ó " are believed to result from the migration of pre-2000 ASCII-to-UTF-8
+	// diacritical encodings in Puerto Rican/Spanish street records, which persist
+	// as literal strings in annual TIGER/Line roll-forwards.
+	base, _ = strings.CutPrefix(base, "Ó ")
+
+	// in Puerto Rico especially the NAME may contain secondary "prefixes" that should
+	// be expanded per pub 28.
+	baseparts := strings.Split(base, " ")
+	expandedbaseparts := slices.Collect(func(yield func(string) bool) {
+		for _, part := range baseparts {
+			v := part
+			info, ok := featnameMap[part]
+			if ok {
+				v = info.Full
+			}
+			if !yield(v) {
+				return
+			}
+		}
+	})
+	base = strings.Join(expandedbaseparts, " ")
 
 	prefixqualifier := ""
 	// attr['PREQUAL'] will contain a numeric code for qualifiers
@@ -111,21 +135,13 @@ func Pub28FeatureName(attr map[string]any) string {
 	}
 	prefixInfo, ok := featnameMap[pt]
 	if ok && prefixInfo.Prefix {
-		// if sfp == "72" {
-		// 	// 72 is Puerto Rico - an English prefix should be very uncommon there because
-		// 	// the prefix position is proper in Spanish; an English word in that position
-		// 	// would just be confusing. Unfortunately, the TIGER files use the English
-		// 	// prefix type code frequently for these streets. So we are taking the liberty
-		// 	// of overriding them.
-		// 	c, ok := spanishCollisions[prefixInfo.Short]
-		// 	if ok {
-		// 		prefixInfo = c
-		// 	}
-		// }
-		if prefixInfo.Spanish {
-			isSpanish = true
+		// "72" is Puerto Rico, where the legal language for street names is Spanish
+		override, applied := ApplySpanishPrefixOverrides(strings.ToUpper(prefixInfo.Short), base, sfp == "72")
+		if applied {
+			prefixtype = override
+		} else {
+			prefixtype = prefixInfo.Full
 		}
-		prefixtype = prefixInfo.Full
 	}
 
 	suffixqualifier := ""
@@ -148,10 +164,6 @@ func Pub28FeatureName(attr map[string]any) string {
 	}
 	suffixInfo, ok := featnameMap[st]
 	if ok && suffixInfo.Suffix {
-		if suffixInfo.Spanish {
-			isSpanish = true
-		}
-
 		// only abbreviate known pub28 suffixes
 		p28, ok := pub28StreetSuffixes[suffixInfo.Full]
 		if ok {
@@ -169,8 +181,7 @@ func Pub28FeatureName(attr map[string]any) string {
 	if ok {
 		pdir := fieldutil.AsString(rawpdir)
 		if len(pdir) > 0 {
-			pd := directionals.Expand(pdir, isSpanish)
-			prefixdirectional = directionals.Pub28(pd)
+			prefixdirectional = directionals.Pub28(pdir)
 		}
 	}
 
@@ -180,25 +191,13 @@ func Pub28FeatureName(attr map[string]any) string {
 	if ok {
 		sdir := fieldutil.AsString(rawsdir)
 		if len(sdir) > 0 {
-			sd := directionals.Expand(sdir, isSpanish)
-			suffixdirectional = directionals.Pub28(sd)
+			suffixdirectional = directionals.Pub28(sdir)
 		}
 	}
 
-	// According to USPS Pub 28 Puerto Rican addresses begin with the street type.
-	// Additionally, directional prefixes are noted as rare (and "Ó " is not a
-	// valid directional prefix.)
-	// https://www2.census.gov/geo/tiger/rd_2ktiger/tgrrd2k.pdf lists "Ó" as one
-	// of the characters that it previously used square brackets to indicate.
-	// On that basis, the roughly 77 street records in puerto rico starting with
-	// "Ó " are believed to result from the migration of pre-2000 ASCII-to-UTF-8
-	// diacritical encodings in Puerto Rican/Spanish street records, which persist
-	// as literal strings in annual TIGER/Line roll-forwards.
-	base, _ = strings.CutPrefix(base, "Ó ")
-
-	if sfp == "72" && len(prefixtype) > 0 && !isSpanish {
-		fmt.Printf("(Spanish?: %t): %v\n", isSpanish, attr)
-	}
+	// if len(prefixtype) > 0 && prefixtype != prefixInfo.Full {
+	// 	fmt.Printf("(Spanish?: %t): %s %s | %s | %v\n", prefixInfo.Spanish, prefixtype, prefixInfo.Full, base, attr["FULLNAME"])
+	// }
 
 	// The full concatenation order in TIGER files is:
 	//   Prefix Qualifier (e.g., Old, New)

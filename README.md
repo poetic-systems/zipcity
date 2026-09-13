@@ -220,3 +220,43 @@ the county's files have to be there already.
    deliberate: we would rather give a caller no answer than a wrong one. It is
    recorded here so the cost of the row is visible, and so it can be reported
    to the Census Bureau.
+
+4. TIGER files sometimes report Spanish prefixes as non-Spanish English variants
+   that share a spelling or abbreviation. TIGER repors "Canal de Riego" in Puerto
+   Rico with the prefix "Cnl" and indicates that it is an English prefix type -
+   with no regard for the location or text of the rest of the street name.
+
+   This is relatively harmless for "Canal", which is spelled the same in both
+   languages. This is similarly true for "Plaza". "Ct" shows up as a prefix in
+   Puerto Rico as well in a way that looks like it actually should be treated as
+   "Court" (within a development.)
+
+   It is more problematic for the "Avenue" / "Avenida" pair, which both
+   are abbreviated "Ave". It appears when a street name like "Avenida Santiago
+   Vivaldi" is ingested, it is frequently shortened to "Ave Santiago Vivaldi"
+   before the prefix type is determined (possibly by local authorities providing
+   data to the Census Bureau.) When the TIGER text parsing engine evaluates the
+   token "Ave", the English prefix is matched. This problem is not consistent
+   across all street names with this prefix, so it appears to depend on when the
+   "Ave" abbreviation was applied. (Conversely, in Puerto Rico some streets show
+   up with the abbreviated English prefix "Blvd" or the full version "Boulevard"
+   instead of the Spanish "Bulevar", which appears to be correct - and documented
+   in USPS Pub 28 / Project US@.)
+
+   For Puerto Rico we recognize that Spanish is the primary legal language for
+   street names and assume that the Spanish full text prefix is actually correct.
+   This would be correct the vast majority of the time (we haven't observed any
+   counter-examples.) However, there are examples of this collision occuring in
+   areas of the country that are do not use Spanish as the primary language for
+   street names, but have a sufficient Spanish influence that Spanish street names
+   do occur. Defaulting to Spanish in these cases could likely still be correct
+   much of the time, but it would incorrectly represent street names like "Avenue
+   of the Americas" or "Avenue C". Instead, exclusively for the collision between
+   the prefixes "Avenue" and "Avenida", we match the text of the full street name
+   against a regular expression that recognizes many indicators of a Spanish
+   street name and use that to decide.
+
+   A longer term strategy may employ a small language model to analyze the street
+   name, an API call to Open Street Map (or similar) during bloom filter generation,
+   or some other data source to allow us to determine the correct full prefix text
+   for the street name to to add to the bloom filter.
