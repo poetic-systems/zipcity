@@ -13,7 +13,6 @@
 package featnames
 
 import (
-	"fmt"
 	"maps"
 	"regexp"
 	"slices"
@@ -52,41 +51,27 @@ var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	}
 })
 
-var featnameCodeReplacements = slices.Collect(func(yield func(string) bool) {
-	sorted := slices.SortedStableFunc(func(yield func(FeatnameInfo) bool) {
+// English rows are yielded last so they win a Short collision (AVE is both 124
+// AVENIDA and 125 AVENUE); ApplySpanishPrefixOverrides picks the Spanish reading.
+var featnameShortMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
+	for _, spanish := range []bool{true, false} {
 		for f := range featuretypes.All() {
-			if !yield(f) {
+			if f.Spanish == spanish && !yield(f.Short, f) {
 				return
 			}
-		}
-	}, func(a, b FeatnameInfo) int {
-		// Sort by length first, then lexigraphically
-		// If we wanted to we could sort by words first, but length is good enough
-		// because a token can't be inside another token unless it is shorter
-		lenA := len(a.Short)
-		lenB := len(b.Short)
-		if lenA == lenB {
-			if a.Short < b.Short {
-				return -1
-			}
-			if a.Short > b.Short {
-				return 1
-			}
-			return 0
-		}
-		return lenB - lenA
-	})
-	for _, f := range sorted {
-		if !yield(fmt.Sprintf("%s ", f.Short)) {
-			return
-		}
-		if !yield(fmt.Sprintf("{{%s}} ", f.Code)) {
-			return
 		}
 	}
 })
 
-var featnameCodeReplacer = strings.NewReplacer(featnameCodeReplacements...)
+// The longest Short is several words ("BUREAU OF INDIAN AFFAIRS HIGHWAY"), so
+// the base name is matched as windows of whole tokens, longest window first.
+var featnameShortMaxWords = slices.Max(slices.Collect(func(yield func(int) bool) {
+	for f := range featuretypes.All() {
+		if !yield(strings.Count(f.Short, " ") + 1) {
+			return
+		}
+	}
+}))
 
 var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	for s := range streetsuffixes.All() {
@@ -138,31 +123,29 @@ func Pub28FeatureName(attr map[string]any) string {
 
 	// The NAME may contain secondary "prefixes" that should be expanded per pub 28.
 	// However, examples like MT ST HELENS RD mean we have to be careful of certain collisions
-	// NOTE: We are converting abbreviations to code tokens so "CO RD" and other multi-word
-	// feature name values substitute properly.
-	baseparts := strings.Split(featnameCodeReplacer.Replace(fmt.Sprintf("%s ", base)), " ")
+	// Matching whole tokens, longest window first, lets "CO RD" and other multi-word
+	// feature name values expand while "ST" never matches inside "FOREST".
+	baseparts := strings.Fields(base)
 	expandedbaseparts := slices.Collect(func(yield func(string) bool) {
-		for _, part := range baseparts {
-			v := part
-			if strings.HasPrefix(v, "{{") && strings.HasSuffix(v, "}}") {
-				// get the code and convert it back to the abbreviation
-				c := v[2 : len(v)-2]
-				info, ok := featnameMap[c]
-				if ok {
-					// We skip replacing exceptions because they often mean something else when
-					// they are in the base street name
-					if !slices.Contains(basePartExceptions, info.Short) {
-						v, _ = ApplySpanishPrefixOverrides(info, base, sfp == "72")
-					}
+		for i := 0; i < len(baseparts); i++ {
+			v := baseparts[i]
+			for w := min(featnameShortMaxWords, len(baseparts)-i); w > 0; w-- {
+				short := strings.Join(baseparts[i:i+w], " ")
+				info, ok := featnameShortMap[short]
+				// We skip replacing exceptions because they often mean something else when
+				// they are in the base street name
+				if ok && !slices.Contains(basePartExceptions, short) {
+					v, _ = ApplySpanishPrefixOverrides(info, base, sfp == "72")
+					i += w - 1
+					break
 				}
 			}
-
 			if !yield(v) {
 				return
 			}
 		}
 	})
-	base = fieldutil.JoinNonEmpty(expandedbaseparts, " ")
+	base = strings.Join(expandedbaseparts, " ")
 
 	prefixqualifier := ""
 	// attr['PREQUAL'] will contain a numeric code for qualifiers
