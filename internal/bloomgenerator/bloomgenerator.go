@@ -7,7 +7,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"go/format"
@@ -22,6 +21,7 @@ import (
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/areazip"
+	"github.com/poetic-systems/zipcity/internal/bloomfilename"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
@@ -59,13 +59,19 @@ func main() {
 	// The previous strategy of writing the bytes directly into the
 	// generated template file used ~16 bits per bit of data, resulting
 	// in a 100MB generated source file. The cumulative size of the
-	// compiled filter directory is now about 40 MB.
+	// compiled filter directory is now about 26 MB.
 
 	now := time.Now()
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
+	filterDir := path.Join(
+		cwd,
+		"generated",
+		"compiled_filter",
+		"bloom_filters",
+	)
 
 	// Data Ingestion Loop
 	// loop through the parsed US Census Bureau TIGER files here
@@ -306,21 +312,15 @@ func main() {
 		zsidentifier := fmt.Sprintf("%s-%s", "zip-street", zipscope)
 		zipstreetfiles[zsVarName] = zsidentifier
 
-		zsfilename := path.Join(
-			cwd,
-			"generated",
-			"compiled_filter",
-			fmt.Sprintf("%s.bin", zsidentifier),
+		err := serialize(
+			path.Join(
+				filterDir,
+				bloomfilename.Filename(zsidentifier),
+			),
+			streetFilter,
 		)
-		zsfile, err := os.Create(zsfilename)
 		if err != nil {
-			panic(fmt.Errorf("Failed to create file: %w", err))
-		}
-		defer zsfile.Close()
-
-		_, err = streetFilter.WriteTo(zsfile)
-		if err != nil {
-			panic(fmt.Errorf("Failed to write bloom filter to disk: %w", err))
+			panic(err)
 		}
 	}
 
@@ -334,21 +334,15 @@ func main() {
 
 	// Serialize the Zip to City Bloom Filter
 
-	zcfilename := path.Join(
-		cwd,
-		"generated",
-		"compiled_filter",
-		fmt.Sprintf("%s.bin", "zip-city"),
+	err = serialize(
+		path.Join(
+			filterDir,
+			bloomfilename.Filename("zip-city"),
+		),
+		cityFilter,
 	)
-	zcfile, err := os.Create(zcfilename)
 	if err != nil {
-		panic(fmt.Errorf("Failed to create file: %w", err))
-	}
-	defer zcfile.Close()
-
-	_, err = cityFilter.WriteTo(zcfile)
-	if err != nil {
-		panic(fmt.Errorf("Failed to write bloom filter to disk: %w", err))
+		panic(err)
 	}
 
 	citystreetfiles := make(map[string]string, 0)
@@ -368,21 +362,15 @@ func main() {
 		csidentifier := fmt.Sprintf("%s-%s", "city-street", uspsstate)
 		citystreetfiles[csVarName] = csidentifier
 
-		csfilename := path.Join(
-			cwd,
-			"generated",
-			"compiled_filter",
-			fmt.Sprintf("%s.bin", csidentifier),
+		err = serialize(
+			path.Join(
+				filterDir,
+				bloomfilename.Filename(csidentifier),
+			),
+			cityStreetFilter,
 		)
-		csfile, err := os.Create(csfilename)
 		if err != nil {
-			panic(fmt.Errorf("Failed to create file: %w", err))
-		}
-		defer csfile.Close()
-
-		_, err = cityStreetFilter.WriteTo(csfile)
-		if err != nil {
-			panic(fmt.Errorf("Failed to write bloom filter to disk: %w", err))
+			panic(err)
 		}
 	}
 
@@ -392,12 +380,13 @@ package compiled_filter
 
 import (
 	"bytes"
-	_ "embed"
+	"embed"
 	"fmt"
-	"io"
+	"path"
 	"regexp"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
+	"github.com/poetic-systems/zipcity/internal/bloomfilename"
 )
 
 var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
@@ -416,6 +405,78 @@ var AbsentSources = map[string][]string{
 {{- end }}
 }
 
+//go:embed bloom_filters/*.bin
+var bloomDir embed.FS
+
+// Keep a map of the raw, zero-allocation byte arrays
+var bloom_filters = make(map[CompiledFilter]*bloom.BloomFilter)
+
+// Initialize the bloom filter map immediately
+func init() {
+	for key, name := range allCompiledFilters {
+
+		keypath := path.Join("bloom_filters", bloomfilename.Filename(key))
+
+		// ReadFile allocates each byte slice once during boot
+		data, err := bloomDir.ReadFile(keypath)
+		if err != nil {
+			panic(err)
+		}
+
+		filter := &bloom.BloomFilter{}
+		reader := bytes.NewReader(data)
+		_, err = filter.ReadFrom(reader)
+		if err != nil {
+			panic(fmt.Errorf("Failed to read %s bloom filter: %w", name, err))
+		}
+
+		bloom_filters[name] = filter
+	}
+}
+
+func toCompiledFilter(in string) (CompiledFilter, error) {
+	cf, ok := allCompiledFilters[in]
+	if ok {
+		return cf, nil
+	}
+	return Unrecognized, fmt.Errorf("Unrecognized filter name")
+}
+
+func CityStreetFilterForState(state string) (CompiledFilter, error) {
+	if len(state) != 2 {
+		return Unrecognized, fmt.Errorf("USPS state abbreviation required")
+	}
+
+	filterid := fmt.Sprintf("city-street-%s", state)
+	cf, err := toCompiledFilter(filterid)
+	if err != nil {
+		return Unrecognized, fmt.Errorf("Supported USPS state abbreviation required")
+	}
+	return cf, nil
+}
+
+func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
+	if !zip5pattern.MatchString(zip) {
+		return Unrecognized, fmt.Errorf("5-digit zip code required")
+	}
+	zip2 := zip[0:2]
+	filterid := fmt.Sprintf("zip-street-%s", zip2)
+	cf, err := toCompiledFilter(filterid)
+	if err != nil {
+		return Unrecognized, fmt.Errorf("known 5-digit zip code required")
+	}
+	return cf, nil
+}
+
+// LoadFilter restores the compiled filter in memory
+func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
+	filter, ok := bloom_filters[name]
+	if !ok {
+		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
+	}
+	return filter, nil
+}
+
 type CompiledFilter string
 
 const (
@@ -429,74 +490,15 @@ const (
 {{- end }}
 )
 
-func CityStreetFilterForState(state string) (CompiledFilter, error) {
-	if len(state) != 2 {
-		return Unrecognized, fmt.Errorf("USPS state abbreviation required")
-	}
-
-	filterid := fmt.Sprintf("city-street-%s", state)
-	switch filterid {
+var allCompiledFilters = map[string]CompiledFilter{
+	"zip-city":       ZipCity,
 {{- range $varName, $csidentifier := .CSFiles }}
-	case "{{- $csidentifier -}}":
-		return {{ $varName }}, nil
+	"{{- $csidentifier -}}": {{ $varName }},
 {{- end }}
-	}
-	return Unrecognized, fmt.Errorf("USPS state abbreviation required")
-}
-
-func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
-	if !zip5pattern.MatchString(zip) {
-		return Unrecognized, fmt.Errorf("5-digit zip code required")
-	}
-	zip2 := zip[0:2]
-	filterid := fmt.Sprintf("zip-street-%s", zip2)
-	switch filterid {
 {{- range $varName, $zsidentifier := .ZSFiles }}
-	case "{{- $zsidentifier -}}":
-		return {{ $varName }}, nil
+	"{{- $zsidentifier -}}": {{ $varName }},
 {{- end }}
-	}
-	return Unrecognized, fmt.Errorf("5-digit zip code required")
 }
-
-// LoadFilter restores the compiled filter in memory
-func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
-	filter := &bloom.BloomFilter{}
-	var reader io.Reader
-	switch name {
-	case ZipCity:
-		reader = bytes.NewReader(RawZipCityFilterBytes)
-	{{- range $varName, $csidentifier := .CSFiles }}
-	case {{ $varName -}}:
-		reader = bytes.NewReader(Raw{{- $varName -}}FilterBytes)
-	{{- end }}
-	{{- range $varName, $zsidentifier := .ZSFiles }}
-	case {{ $varName -}}:
-		reader = bytes.NewReader(Raw{{- $varName -}}FilterBytes)
-	{{- end }}
-	default:
-		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
-	}
-	_, err := filter.ReadFrom(reader)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read %s bloom filter: %w", name, err)
-	}
-	return filter, nil
-}
-
-{{ range $varName, $csidentifier := .CSFiles }}
-//go:embed {{ $csidentifier -}}.bin
-var Raw{{ $varName }}FilterBytes []byte
-{{ end }}
-
-{{ range $varName, $zsidentifier := .ZSFiles }}
-//go:embed {{ $zsidentifier -}}.bin
-var Raw{{ $varName }}FilterBytes []byte
-{{ end }}
-
-// RawZipCityFilterBytes holds the pre-compiled zip-city Bloom filter
-//go:embed zip-city.bin
-var RawZipCityFilterBytes []byte
 
 `
 	templateFuncMap := template.FuncMap{
@@ -504,7 +506,7 @@ var RawZipCityFilterBytes []byte
 	}
 	t := template.Must(template.New("filter").Funcs(templateFuncMap).Parse(tmpl))
 
-	err = os.MkdirAll("./generated/compiled_filter", 0755)
+	err = os.MkdirAll("./generated/compiled_filter/bloom_filters", 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -551,7 +553,7 @@ func absentRows(absent ustigerline.AbsentSources) []struct {
 	return rows
 }
 
-func writeAsGob(filename string, data *bloom.BloomFilter) error {
+func serialize(filename string, data *bloom.BloomFilter) error {
 	filedir := path.Dir(filename)
 	err := os.MkdirAll(filedir, 0755)
 	if err != nil {
@@ -564,6 +566,9 @@ func writeAsGob(filename string, data *bloom.BloomFilter) error {
 	}
 	defer file.Close()
 
-	encoder := gob.NewEncoder(file)
-	return encoder.Encode(data)
+	_, err = data.WriteTo(file)
+	if err != nil {
+		return fmt.Errorf("Failed to write bloom filter to disk: %w", err)
+	}
+	return nil
 }

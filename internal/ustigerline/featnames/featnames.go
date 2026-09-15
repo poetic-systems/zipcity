@@ -13,6 +13,7 @@
 package featnames
 
 import (
+	"fmt"
 	"maps"
 	"regexp"
 	"slices"
@@ -26,7 +27,7 @@ import (
 )
 
 // We want to look for indicators of a Spanish street name
-var spanishMarkerRegex = regexp.MustCompile(`\b(de|del|de\s+las|de\s+los|san|santa|don|doña|villa|plaza)\b`)
+var spanishMarkerRegex = regexp.MustCompile(`(?i)\b(de|del|las|los|san|santa|don|doña|val|valle|villa|plaza)\b`)
 
 var spanishPrefixOverrides = map[string]string{
 	"AVE": "AVENIDA",
@@ -51,14 +52,41 @@ var featnameMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
 	}
 })
 
-var featnameShortMap = maps.Collect(func(yield func(string, FeatnameInfo) bool) {
-	for f := range featuretypes.All() {
-		// Enable lookup by f.Short only
-		if !yield(f.Short, f) {
+var featnameCodeReplacements = slices.Collect(func(yield func(string) bool) {
+	sorted := slices.SortedStableFunc(func(yield func(FeatnameInfo) bool) {
+		for f := range featuretypes.All() {
+			if !yield(f) {
+				return
+			}
+		}
+	}, func(a, b FeatnameInfo) int {
+		// Sort by length first, then lexigraphically
+		// If we wanted to we could sort by words first, but length is good enough
+		// because a token can't be inside another token unless it is shorter
+		lenA := len(a.Short)
+		lenB := len(b.Short)
+		if lenA == lenB {
+			if a.Short < b.Short {
+				return -1
+			}
+			if a.Short > b.Short {
+				return 1
+			}
+			return 0
+		}
+		return lenB - lenA
+	})
+	for _, f := range sorted {
+		if !yield(fmt.Sprintf("%s ", f.Short)) {
+			return
+		}
+		if !yield(fmt.Sprintf("{{%s}} ", f.Code)) {
 			return
 		}
 	}
 })
+
+var featnameCodeReplacer = strings.NewReplacer(featnameCodeReplacements...)
 
 var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	for s := range streetsuffixes.All() {
@@ -70,18 +98,19 @@ var pub28StreetSuffixes = maps.Collect(func(yield func(string, string) bool) {
 	}
 })
 
-func ApplySpanishPrefixOverrides(prefix string, full string, defaultSpanish bool) (string, bool) {
+func ApplySpanishPrefixOverrides(info FeatnameInfo, full string, defaultSpanish bool) (string, bool) {
 	// In Puerto Rico, where the legal language for street names is Spanish, we can assume
 	// that an English prefix that collides with a Spanish one is a data ingestion error.
 	// Otherwise, as a special case for "AVE", we check the rest of the street name text to
 	// see if it looks like Spanish.
-	if defaultSpanish || (prefix == "AVE" && spanishMarkerRegex.MatchString(full)) {
-		spanish, ok := spanishPrefixOverrides[prefix]
+	short := strings.ToUpper(info.Short)
+	if defaultSpanish || (short == "AVE" && spanishMarkerRegex.MatchString(full)) {
+		spanish, ok := spanishPrefixOverrides[short]
 		if ok {
 			return spanish, true
 		}
 	}
-	return prefix, false
+	return info.Full, false
 }
 
 func Pub28FeatureName(attr map[string]any) string {
@@ -109,24 +138,31 @@ func Pub28FeatureName(attr map[string]any) string {
 
 	// The NAME may contain secondary "prefixes" that should be expanded per pub 28.
 	// However, examples like MT ST HELENS RD mean we have to be careful of certain collisions
-	baseparts := strings.Split(base, " ")
+	// NOTE: We are converting abbreviations to code tokens so "CO RD" and other multi-word
+	// feature name values substitute properly.
+	baseparts := strings.Split(featnameCodeReplacer.Replace(fmt.Sprintf("%s ", base)), " ")
 	expandedbaseparts := slices.Collect(func(yield func(string) bool) {
 		for _, part := range baseparts {
 			v := part
-			if slices.Contains(basePartExceptions, v) {
-				// Skip the part because it often means something else when in the base street name
-				continue
+			if strings.HasPrefix(v, "{{") && strings.HasSuffix(v, "}}") {
+				// get the code and convert it back to the abbreviation
+				c := v[2 : len(v)-2]
+				info, ok := featnameMap[c]
+				if ok {
+					// We skip replacing exceptions because they often mean something else when
+					// they are in the base street name
+					if !slices.Contains(basePartExceptions, info.Short) {
+						v, _ = ApplySpanishPrefixOverrides(info, base, sfp == "72")
+					}
+				}
 			}
-			info, ok := featnameShortMap[part]
-			if ok {
-				v = info.Full
-			}
+
 			if !yield(v) {
 				return
 			}
 		}
 	})
-	base = strings.Join(expandedbaseparts, " ")
+	base = fieldutil.JoinNonEmpty(expandedbaseparts, " ")
 
 	prefixqualifier := ""
 	// attr['PREQUAL'] will contain a numeric code for qualifiers
@@ -149,12 +185,7 @@ func Pub28FeatureName(attr map[string]any) string {
 	prefixInfo, ok := featnameMap[pt]
 	if ok && prefixInfo.Prefix {
 		// "72" is Puerto Rico, where the legal language for street names is Spanish
-		override, applied := ApplySpanishPrefixOverrides(strings.ToUpper(prefixInfo.Short), base, sfp == "72")
-		if applied {
-			prefixtype = override
-		} else {
-			prefixtype = prefixInfo.Full
-		}
+		prefixtype, _ = ApplySpanishPrefixOverrides(prefixInfo, base, sfp == "72")
 	}
 
 	suffixqualifier := ""
