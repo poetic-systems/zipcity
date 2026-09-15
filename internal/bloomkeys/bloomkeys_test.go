@@ -21,10 +21,7 @@ func TestKeyZipStreet(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got, err := bloomkeys.KeyZipStreet(tc.Zip, tc.Street)
-		if err != nil {
-			t.Fatalf("Error preparing zip-street key: %s", err)
-		}
+		got := bloomkeys.KeyZipStreet(tc.Zip, tc.Street)
 		if got != tc.Want {
 			t.Fatalf("Wanted: '%s' Got: '%s", tc.Want, got)
 		}
@@ -45,10 +42,7 @@ func TestKeyZipCity(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got, err := bloomkeys.KeyZipCity(tc.Zip, tc.City)
-		if err != nil {
-			t.Fatalf("Error preparing zip-street key: %s", err)
-		}
+		got := bloomkeys.KeyZipCity(tc.Zip, tc.City)
 		if got != tc.Want {
 			t.Fatalf("Wanted: '%s' Got: '%s", tc.Want, got)
 		}
@@ -70,10 +64,7 @@ func TestKeyCityStateStreet(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		got, err := bloomkeys.KeyCityStateStreet(tc.City, tc.State, tc.Street)
-		if err != nil {
-			t.Fatalf("Error preparing zip-street key: %s", err)
-		}
+		got := bloomkeys.KeyCityStateStreet(tc.City, tc.State, tc.Street)
 		if got != tc.Want {
 			t.Fatalf("Wanted: '%s' Got: '%s", tc.Want, got)
 		}
