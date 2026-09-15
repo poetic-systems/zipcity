@@ -88,6 +88,12 @@ var testData = []struct {
 		Zip:    "94523",
 	},
 	{
+		Street: "pleasant hill rd",
+		City:   "pleasant hill",
+		State:  "ca",
+		Zip:    "94523",
+	},
+	{
 		Street: "The Alameda",
 		City:   "San Jose",
 		State:  "CA",

@@ -384,6 +384,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strings"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/bloomfilename"
@@ -447,7 +448,7 @@ func CityStreetFilterForState(state string) (CompiledFilter, error) {
 		return Unrecognized, fmt.Errorf("USPS state abbreviation required")
 	}
 
-	filterid := fmt.Sprintf("city-street-%s", state)
+	filterid := fmt.Sprintf("city-street-%s", strings.ToUpper(state))
 	cf, err := toCompiledFilter(filterid)
 	if err != nil {
 		return Unrecognized, fmt.Errorf("Supported USPS state abbreviation required")

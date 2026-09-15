@@ -195,44 +195,45 @@ the county's files have to be there already.
 
 ## Notable Mitigated Issues
 
-1. At times TIGER files on the Census Bureau's FTP site return an error page with
-   a 200 status code instead of the listed TIGER file. Bloom filter generation
-   should fail if any index page or file fails in this manner.
+1. At times TIGER files on the Census Bureau's FTP site return an error page
+   with a 200 status code instead of the listed TIGER file. Bloom filter
+   generation should fail if any index page or file fails in this manner.
 
-2. There are no address range files for the Marshal Islands and the Northern
-   Marianas Islands. This is a deliberate choice by the Census Bureau because their
-   data does not support the files existing. We compensate for this with zip code
-   data from Geonames.
+2. There are no address range files for the Marshall Islands and the Northern
+   Marianas Islands. This is a deliberate choice by the Census Bureau because
+   their data does not support the files existing. We compensate for this with
+   zip code data from Geonames.
 
 3. A published file can carry a row that is simply wrong, and a wrong row is
-   more expensive than a missing one. In
-   `TIGER2025/ADDR/tl_2025_02100_addr.zip` — Haines Borough, Alaska — the
-   address range `ARID 40027724370979` (`TLID 190961593`, `SIDE R`, house
-   numbers 401–499, on Allen Rd, alternately Menaker Rd) names `ZIP 81087`.
-   That is Vilas, Colorado, about 2,300 miles from Haines. It is the 192nd of
-   the 348 records in the `.dbf`, counting the first record as 1; a viewer that
-   counts the field header as a line calls it line 193.
+   more expensive than a missing one. In `TIGER2025/ADDR/tl_2025_02100_addr.zip`
+   — Haines Borough, Alaska — the address range `ARID 40027724370979`
+   (`TLID 190961593`, `SIDE R`, house numbers 401–499, on Allen Rd, alternately
+   Menaker Rd) names `ZIP 81087`. That is Vilas, Colorado, about 2,300 miles
+   from Haines. It is the 192nd of the 348 records in the `.dbf`, counting the
+   first record as 1; a viewer that counts the field header as a line calls it
+   line 193.
 
-   The other 347 records agree with GeoNames or say nothing — 344 name 99827
-   and 3 name no ZIP Code — so this single row is the borough's only dissent.
+   The other 347 records agree with GeoNames or say nothing — 344 name 99827 and
+   3 name no ZIP Code — so this single row is the borough's only dissent.
    Because a sole-ZIP-Code inference is refused on the first disagreement
    (`internal/areazip`), the whole of Haines Borough loses it. That is
    deliberate: we would rather give a caller no answer than a wrong one. It is
-   recorded here so the cost of the row is visible, and so it can be reported
-   to the Census Bureau.
+   recorded here so the cost of the row is visible, and so it can be reported to
+   the Census Bureau.
 
 4. TIGER files sometimes report Spanish prefixes as non-Spanish English variants
-   that share a spelling or abbreviation. TIGER repors "Canal de Riego" in Puerto
-   Rico with the prefix "Cnl" and indicates that it is an English prefix type -
-   with no regard for the location or text of the rest of the street name.
+   that share a spelling or abbreviation. TIGER reports "Canal de Riego" in
+   Puerto Rico with the prefix "Cnl" and indicates that it is an English prefix
+   type - with no regard for the location or text of the rest of the street
+   name.
 
    This is relatively harmless for "Canal", which is spelled the same in both
    languages. This is similarly true for "Plaza". "Ct" shows up as a prefix in
    Puerto Rico as well in a way that looks like it actually should be treated as
    "Court" (within a development.)
 
-   It is more problematic for the "Avenue" / "Avenida" pair, which both
-   are abbreviated "Ave". It appears when a street name like "Avenida Santiago
+   It is more problematic for the "Avenue" / "Avenida" pair, which both are
+   abbreviated "Ave". It appears when a street name like "Avenida Santiago
    Vivaldi" is ingested, it is frequently shortened to "Ave Santiago Vivaldi"
    before the prefix type is determined (possibly by local authorities providing
    data to the Census Bureau.) When the TIGER text parsing engine evaluates the
@@ -240,23 +241,23 @@ the county's files have to be there already.
    across all street names with this prefix, so it appears to depend on when the
    "Ave" abbreviation was applied. (Conversely, in Puerto Rico some streets show
    up with the abbreviated English prefix "Blvd" or the full version "Boulevard"
-   instead of the Spanish "Bulevar", which appears to be correct - and documented
-   in USPS Pub 28 / Project US@.)
+   instead of the Spanish "Bulevar", which appears to be correct - and
+   documented in USPS Pub 28 / Project US@.)
 
    For Puerto Rico we recognize that Spanish is the primary legal language for
-   street names and assume that the Spanish full text prefix is actually correct.
-   This would be correct the vast majority of the time (we haven't observed any
-   counter-examples.) However, there are examples of this collision occuring in
-   areas of the country that are do not use Spanish as the primary language for
-   street names, but have a sufficient Spanish influence that Spanish street names
-   do occur. Defaulting to Spanish in these cases could likely still be correct
-   much of the time, but it would incorrectly represent street names like "Avenue
-   of the Americas" or "Avenue C". Instead, exclusively for the collision between
-   the prefixes "Avenue" and "Avenida", we match the text of the full street name
-   against a regular expression that recognizes many indicators of a Spanish
-   street name and use that to decide.
+   street names and assume that the Spanish full text prefix is actually
+   correct. This would be correct the vast majority of the time (we haven't
+   observed any counter-examples.) However, there are examples of this collision
+   occurring in areas of the country that do not use Spanish as the primary
+   language for street names, but have a sufficient Spanish influence that
+   Spanish street names do occur. Defaulting to Spanish in these cases could
+   likely still be correct much of the time, but it would incorrectly represent
+   street names like "Avenue of the Americas" or "Avenue C". Instead,
+   exclusively for the collision between the prefixes "Avenue" and "Avenida", we
+   match the text of the full street name against a regular expression that
+   recognizes many indicators of a Spanish street name and use that to decide.
 
-   A longer term strategy may employ a small language model to analyze the street
-   name, an API call to Open Street Map (or similar) during bloom filter generation,
-   or some other data source to allow us to determine the correct full prefix text
-   for the street name to to add to the bloom filter.
+   A longer term strategy may employ a small language model to analyze the
+   street name, an API call to Open Street Map (or similar) during bloom filter
+   generation, or some other data source to allow us to determine the correct
+   full prefix text for the street name to add to the bloom filter.
