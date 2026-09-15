@@ -167,6 +167,17 @@ func Pub28FeatureName(attr map[string]any) string {
 	}
 	prefixInfo, ok := featnameMap[pt]
 	if ok && prefixInfo.Prefix {
+		// The prefix type is rendered from the code's Full form rather than
+		// copied from FULLNAME, and the difference is not cosmetic. Across
+		// San Juan, Ponce, Mayagüez, Bayamón, Caguas and Guaynabo, FULLNAME
+		// spells 26 distinct leading types: ten abbreviated in TIGER's own
+		// vocabulary (CLL 39,050 times, AVE, CAM, QBDA, CARR, SEC, PSO, BLVD,
+		// PLZ, CNL) and the rest written out (EXPRESO, CALLEJÓN, AUTOPISTA,
+		// RÍO, ...), with no rule that says which a given record will use.
+		// Project US@ (p. 26) forbids abbreviating a street name, so a caller
+		// sends CALLE LOIZA; a key copied from FULLNAME would hold CLL LOIZA
+		// and the lookup would miss a street that is in the data. See #25.
+		//
 		// "72" is Puerto Rico, where the legal language for street names is Spanish
 		prefixtype, _ = ApplySpanishPrefixOverrides(prefixInfo, base, sfp == "72")
 	}
