@@ -25,6 +25,7 @@ import (
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
+	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
 type ZipStreetTuple struct {
@@ -33,8 +34,9 @@ type ZipStreetTuple struct {
 }
 
 type ZipCityTuple struct {
-	Zip  string
-	City string
+	Zip   string
+	City  string
+	State string
 }
 
 type CityStreetTuple struct {
@@ -125,8 +127,9 @@ func main() {
 			_, found := zipCityData[key]
 			if !found {
 				zipCityData[key] = ZipCityTuple{
-					Zip:  zip,
-					City: place.PlaceName,
+					Zip:   zip,
+					City:  place.PlaceName,
+					State: place.StateUSPS,
 				}
 			}
 		}
@@ -220,8 +223,9 @@ func main() {
 					_, found := zipCityData[key]
 					if !found {
 						zipCityData[key] = ZipCityTuple{
-							Zip:  zip,
-							City: cty,
+							Zip:   zip,
+							City:  cty,
+							State: stateInfo.USPS,
 						}
 						numZip2City += 1
 					}
@@ -312,6 +316,25 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	// The same relation the zip-city filter is built from, written out so a
+	// caller holding a ZIP Code and no city has something to read rather than
+	// only something to ask. Written before the filter is built, off
+	// zipCityData itself, so the table and the filter cannot disagree about
+	// what we have seen. The state is the one the source placed the name
+	// in: GeoNames' admin code for its rows, the county's state for TIGER's.
+	// See poetic-systems/zipcity#17.
+	names := make(zipcities.Table, len(zipCityData))
+	for _, pair := range zipCityData {
+		names.Add(pair.Zip, pair.State, pair.City)
+	}
+	err = writeZipCityNames(
+		path.Join(cwd, "generated", "compiled_filter", "zip-city-names.tsv"),
+		names,
+	)
+	if err != nil {
+		panic(err)
 	}
 
 	// Add ~1/8 of overhead to the count for the base capacity
@@ -542,6 +565,25 @@ func absentRows(absent ustigerline.AbsentSources) []struct {
 	}
 
 	return rows
+}
+
+// writeZipCityNames writes the ZIP Code to city name table beside the
+// compiled filters, where it is committed as the readable form of the
+// relation the zip-city filter answers questions about. The library does not
+// read it back yet.
+func writeZipCityNames(filename string, names zipcities.Table) error {
+	err := os.MkdirAll(path.Dir(filename), 0755)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return zipcities.Encode(file, names)
 }
 
 func serialize(filename string, data *bloom.BloomFilter) error {

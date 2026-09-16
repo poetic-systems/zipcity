@@ -9,7 +9,11 @@ import (
 	"github.com/poetic-systems/zipcity/internal/bloomkeys/diacritics"
 )
 
-func normalize(keypart string) string {
+// Normalize renders a key part the way every filter key holds it: uppercase,
+// with diacritics folded per Project US@ Appendix A. It is exported so that
+// anything written beside the filters (internal/zipcities) can be normalized
+// by the same rule rather than by a copy of it.
+func Normalize(keypart string) string {
 	return strings.ToUpper(diacritics.Fold(keypart))
 }
 
@@ -42,7 +46,7 @@ var spelledOut = maps.Collect(func(yield func(string, string) bool) {
 // Exported so the ZIP-to-city table (#24) can hold the same names the filter
 // answers to.
 func City(name string) string {
-	words := strings.Fields(punctuation.Replace(normalize(name)))
+	words := strings.Fields(punctuation.Replace(Normalize(name)))
 	for i := range len(words) - 1 {
 		if full, ok := spelledOut[words[i]]; ok {
 			words[i] = full
@@ -52,13 +56,13 @@ func City(name string) string {
 }
 
 func KeyZipStreet(zip, street string) string {
-	return fmt.Sprintf("%s:%s", normalize(zip), normalize(street))
+	return fmt.Sprintf("%s:%s", Normalize(zip), Normalize(street))
 }
 
 func KeyZipCity(zip, city string) string {
-	return fmt.Sprintf("%s:%s", normalize(zip), City(city))
+	return fmt.Sprintf("%s:%s", Normalize(zip), City(city))
 }
 
 func KeyCityStateStreet(city, state, street string) string {
-	return fmt.Sprintf("%s:%s:%s", City(city), normalize(state), normalize(street))
+	return fmt.Sprintf("%s:%s:%s", City(city), Normalize(state), Normalize(street))
 }

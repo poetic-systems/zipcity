@@ -180,6 +180,12 @@ the compiled filters and the test fixtures are both committed.
   Unreadable cached files are deleted so the next run fetches them again, and
   all the failures are reported together. A file the Census Bureau does not
   publish never reaches that list, so it is not a failure.
+- **`zip-city-names.tsv` is written but not embedded.** It is the ZIP Code to
+  city name relation the zip-city filter is built from, in a form that can be
+  read out rather than only asked: one line per ZIP Code and state, then the
+  names seen in that state, spelled the way the filter keys them. Whether it
+  is worth its size is being evaluated, so nothing in the library reads it
+  yet. See poetic-systems/zipcity#17.
 
 ### The test fixtures
 
