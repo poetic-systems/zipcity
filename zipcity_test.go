@@ -209,6 +209,9 @@ func TestCheckCityStateAndStreet(t *testing.T) {
 }
 
 func TestMatchStreet(t *testing.T) {
+	// A Bloom filter can only promise the keys it holds, so, like the
+	// Check tests above, these assert presence and never absence: a
+	// regeneration is free to answer yes to a variant that is not there.
 	cases := []struct {
 		Street string
 		City   string
@@ -224,7 +227,6 @@ func TestMatchStreet(t *testing.T) {
 		// with one on the other.
 		{"9200 S", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}},
 		{"M St", "Washington", "DC", "20002", zipcity.Match{Variants: []string{"M ST NE"}}},
-		{"ZZZZQX St", "West Jordan", "UT", "84088", zipcity.Match{}},
 	}
 
 	for _, tc := range cases {
@@ -232,7 +234,7 @@ func TestMatchStreet(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !equalMatch(got, tc.Want) {
+		if !holds(got, tc.Want) {
 			t.Fatalf("Expected zip: '%s' and street: '%s' to match %+v, got %+v", tc.Zip, tc.Street, tc.Want, got)
 		}
 	}
@@ -240,11 +242,20 @@ func TestMatchStreet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if city.Exact || !slices.Equal(city.Variants, []string{"M ST NE", "M ST SE", "M ST NW", "M ST SW"}) {
+	if !holds(city, zipcity.Match{Variants: []string{"M ST NE", "M ST SE", "M ST NW", "M ST SW"}}) {
 		t.Fatalf("Expected every quadrant of M ST in Washington DC, got %+v", city)
 	}
 }
 
-func equalMatch(a, b zipcity.Match) bool {
-	return a.Exact == b.Exact && slices.Equal(a.Variants, b.Variants)
+// holds reports whether got carries everything want promises.
+func holds(got, want zipcity.Match) bool {
+	if want.Exact && !got.Exact {
+		return false
+	}
+	for _, v := range want.Variants {
+		if !slices.Contains(got.Variants, v) {
+			return false
+		}
+	}
+	return true
 }
