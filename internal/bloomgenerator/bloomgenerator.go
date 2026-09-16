@@ -188,9 +188,15 @@ func main() {
 				}
 			}
 			street := ""
+			streetnames := []string{}
 			alts := ""
 			if side.Street != nil {
 				street = side.Street.Name
+				// Only the Pub 28 renderings are keyed. Name is the edges
+				// FULLNAME, TIGER's own abbreviated spelling (I- 5, UNION
+				// PACIFIC RR, CLL LOIZA), which no caller in spec form sends.
+				// See #1.
+				streetnames = side.Street.Alt
 				altbytes, err := json.Marshal(side.Street.Alt)
 				if err != nil {
 					alts = string(altbytes)
@@ -227,8 +233,6 @@ func main() {
 					if !exists {
 						scoped = make(map[string]ZipStreetTuple, 0)
 					}
-					// make sure we include the primary name as well as the alternative names
-					streetnames := append(side.Street.Alt, street)
 					for _, stname := range streetnames {
 						key := bloomkeys.KeyZipStreet(zip, stname)
 						_, found := scoped[key]
@@ -244,8 +248,6 @@ func main() {
 				}
 			}
 			if len(postalcities) > 0 && len(street) > 0 {
-				// make sure we include the primary name as well as the alternative names
-				streetnames := append(side.Street.Alt, street)
 				for _, cityname := range postalcities {
 					for _, stname := range streetnames {
 						stateCityStreetData, ok := cityStreetData[stateInfo.USPS]
