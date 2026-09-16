@@ -207,3 +207,44 @@ func TestCheckCityStateAndStreet(t *testing.T) {
 		}
 	}
 }
+
+func TestMatchStreet(t *testing.T) {
+	cases := []struct {
+		Street string
+		City   string
+		State  string
+		Zip    string
+		Want   zipcity.Match
+	}{
+		{"W Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}},
+		// TIGER attaches the W that a caller who knows the street as Fox
+		// Park Dr does not have (#4).
+		{"Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Variants: []string{"W FOX PARK DR"}}},
+		// A street already carrying a directional on one side is only tried
+		// with one on the other.
+		{"9200 S", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}},
+		{"M St", "Washington", "DC", "20002", zipcity.Match{Variants: []string{"M ST NE"}}},
+		{"ZZZZQX St", "West Jordan", "UT", "84088", zipcity.Match{}},
+	}
+
+	for _, tc := range cases {
+		got, err := zipcity.MatchZipAndStreet(tc.Zip, tc.Street)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !equalMatch(got, tc.Want) {
+			t.Fatalf("Expected zip: '%s' and street: '%s' to match %+v, got %+v", tc.Zip, tc.Street, tc.Want, got)
+		}
+	}
+	city, err := zipcity.MatchCityStateAndStreet("Washington", "DC", "M St")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if city.Exact || !slices.Equal(city.Variants, []string{"M ST NE", "M ST SE", "M ST NW", "M ST SW"}) {
+		t.Fatalf("Expected every quadrant of M ST in Washington DC, got %+v", city)
+	}
+}
+
+func equalMatch(a, b zipcity.Match) bool {
+	return a.Exact == b.Exact && slices.Equal(a.Variants, b.Variants)
+}
