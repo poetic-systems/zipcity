@@ -9,10 +9,8 @@ github.com/bits-and-blooms/bloom/v3 v3.7.1 h1:WXovk4TRKZttAMJfoQx6K2DM0zNIt8w+c6
 github.com/bits-and-blooms/bloom/v3 v3.7.1/go.mod h1:rZzYLLje2dfzXfAkJNxQQHsKurAyK55KUnL43Euk0hU=
 github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=
 github.com/hexops/gotextdiff v1.0.3/go.mod h1:pSWU5MAI3yDq+fZBTazCSJysOMbxWL1BSow5/V2vxeg=
-github.com/poetic-systems/addresstables v0.0.0-20260905190649-4161ec4b8528 h1:N/TVFlCUKXfSsrBo3yUnCNRrP25B3iOP3yhyUTiTCok=
-github.com/poetic-systems/addresstables v0.0.0-20260905190649-4161ec4b8528/go.mod h1:0+0MslI2VD30//JsNgvjPLz04GiV6YEsFE2pni512Fs=
-github.com/poetic-systems/addresstables v0.0.0-20260916131138-94fcce784686 h1:izuWbZTh44Inw9siyECvIM/eNmmcCarHLzkJKE2Ws9g=
-github.com/poetic-systems/addresstables v0.0.0-20260916131138-94fcce784686/go.mod h1:0+0MslI2VD30//JsNgvjPLz04GiV6YEsFE2pni512Fs=
+github.com/poetic-systems/addresstables v0.0.0-20260916210329-942fea7be238 h1:bLwXpKWUepXLkFZAoULe+Omb61+GLMtScz15pGQosvw=
+github.com/poetic-systems/addresstables v0.0.0-20260916210329-942fea7be238/go.mod h1:0+0MslI2VD30//JsNgvjPLz04GiV6YEsFE2pni512Fs=
 github.com/twmb/murmur3 v1.1.8 h1:8Yt9taO/WN3l08xErzjeschgZU2QSrwm1kclYq+0aRg=
 github.com/twmb/murmur3 v1.1.8/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq3OSQ=
 github.com/twpayne/go-geom v1.6.1 h1:iLE+Opv0Ihm/ABIcvQFGIiFBXd76oBIar9drAwHFhR4=
