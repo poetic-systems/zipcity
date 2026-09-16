@@ -32,6 +32,13 @@ var spanishPrefixOverrides = map[string]string{
 	"AVE": "AVENIDA",
 }
 
+// Pub 28 spells out no interstate form, so the key follows what
+// go-projectusat/pkg/highways produces for one: INTERSTATE 5, not Appendix D's
+// INTERSTATE HIGHWAY 5. See #37.
+var pub28PrefixOverrides = map[string]string{
+	"I-": "INTERSTATE",
+}
+
 // These exceptions often mean something else when they occur in the base street name
 // rather than a coded prefix or suffix type
 var basePartExceptions = []string{
@@ -180,6 +187,9 @@ func Pub28FeatureName(attr map[string]any) string {
 		//
 		// "72" is Puerto Rico, where the legal language for street names is Spanish
 		prefixtype, _ = ApplySpanishPrefixOverrides(prefixInfo, base, sfp == "72")
+		if p28, ok := pub28PrefixOverrides[prefixInfo.Short]; ok {
+			prefixtype = p28
+		}
 	}
 
 	suffixqualifier := ""
