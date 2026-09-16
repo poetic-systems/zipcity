@@ -372,6 +372,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
 	"strings"
@@ -400,10 +401,7 @@ var AbsentSources = map[string][]string{
 var bloomDir embed.FS
 
 // Keep a map of the raw, zero-allocation byte arrays
-var bloom_filters = make(map[CompiledFilter]*bloom.BloomFilter)
-
-// Initialize the bloom filter map immediately
-func init() {
+var bloom_filters = maps.Collect(func(yield func(CompiledFilter, *bloom.BloomFilter) bool) {
 	for key, name := range allCompiledFilters {
 
 		keypath := path.Join("bloom_filters", bloomfilename.Filename(key))
@@ -421,9 +419,11 @@ func init() {
 			panic(fmt.Errorf("Failed to read %s bloom filter: %w", name, err))
 		}
 
-		bloom_filters[name] = filter
+		if !yield(name, filter) {
+			return
+		}
 	}
-}
+})
 
 func toCompiledFilter(in string) (CompiledFilter, error) {
 	cf, ok := allCompiledFilters[in]
