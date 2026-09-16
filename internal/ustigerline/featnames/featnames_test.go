@@ -394,6 +394,25 @@ func TestPub28FeatureName(t *testing.T) {
 			},
 			Want: "PARK AVENUE EXT",
 		},
+		{
+			In: map[string]any{
+				"FULLNAME":   "I- 5",
+				"NAME":       "5",
+				"PREDIR":     "",
+				"PREDIRABRV": "",
+				"PREQUAL":    "",
+				"PREQUALABR": "",
+				"PRETYP":     344,
+				"PRETYPABRV": "I-",
+				"SUFDIR":     "",
+				"SUFDIRABRV": "",
+				"SUFQUAL":    "",
+				"SUFQUALABR": "",
+				"SUFTYP":     "",
+				"SUFTYPABRV": "",
+			},
+			Want: "INTERSTATE 5",
+		},
 	}
 
 	for _, tc := range cases {
