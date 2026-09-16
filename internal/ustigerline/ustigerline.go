@@ -379,6 +379,16 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 			// fmt.Printf("No city info found for '%s'\n", placeFP)
 			continue
 		}
+		// Class C8 is "the balance of a consolidated city excluding the
+		// separately incorporated place(s)": INDIANAPOLIS CITY (BALANCE),
+		// NASHVILLE-DAVIDSON METROPOLITAN GOVERNMENT (BALANCE). That is how
+		// the Census Bureau accounts for a city-county government, not a
+		// name anyone writes on an envelope. Left without a place, the
+		// sides inside it take the postal cities GeoNames names for their
+		// ZIP Codes, which is the name people do write. See #41.
+		if fieldutil.AsString(pl["CLASSFP"]) == "C8" {
+			continue
+		}
 		ctyInfo.Name = strings.ToUpper(fmt.Sprintf("%s", pl["NAME"]))
 		ctyInfo.Attributes = pl
 		ctyInfo.Geo = geometry
