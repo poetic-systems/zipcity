@@ -259,3 +259,49 @@ func holds(got, want zipcity.Match) bool {
 	}
 	return true
 }
+
+type StateAndCity struct {
+	State string
+	City  string
+}
+
+func TestCitiesKnownFor(t *testing.T) {
+	testcases := []struct {
+		Zip  string
+		Want []StateAndCity
+	}{
+		{"09001", []StateAndCity{{"AE", "APO"}}},
+		// Straddles a state line: each name under its own state, states in order
+		{"42223", []StateAndCity{{"KY", "FORT CAMPBELL"}, {"KY", "FORT CAMPBELL NORTH"}, {"TN", "CLARKSVILLE"}}},
+		{"00000", nil},
+		{"2017", nil},
+	}
+
+	for _, tc := range testcases {
+		var got []StateAndCity
+		for state, city := range zipcity.CitiesKnownFor(tc.Zip) {
+			got = append(got, StateAndCity{state, city})
+		}
+		if !slices.Equal(got, tc.Want) {
+			t.Errorf("CitiesKnownFor(%q) = %v, want %v", tc.Zip, got, tc.Want)
+		}
+	}
+}
+
+// Every name read out for a code is one the zip-city filter was built from,
+// so the two cannot disagree about what we have seen.
+func TestCitiesKnownForAgreeWithCheckZipAndCity(t *testing.T) {
+	for _, td := range testData {
+		n := 0
+		for _, city := range zipcity.CitiesKnownFor(td.Zip) {
+			n++
+			found, err := zipcity.CheckZipAndCity(td.Zip, city)
+			if err != nil || !found {
+				t.Errorf("CitiesKnownFor(%q) yielded %q, CheckZipAndCity = %v, %v", td.Zip, city, found, err)
+			}
+		}
+		if n == 0 {
+			t.Errorf("CitiesKnownFor(%q) yielded nothing, %q is in the filter", td.Zip, td.City)
+		}
+	}
+}
