@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/format"
+	"log"
 	"maps"
 	"os"
 	"path"
@@ -107,7 +108,7 @@ func main() {
 		panic(err)
 	}
 	for country, err := range geonamesabsent {
-		fmt.Printf("Warning: no GeoNames postal codes for %s: %s\n", country, err)
+		log.Printf("Warning: no GeoNames postal codes for %s: %s", country, err)
 	}
 	placesByZip, err := usgeonames.PlacesByPostalCode(geonamespaths)
 	if err != nil {
@@ -148,9 +149,10 @@ func main() {
 	for county := range ustigerline.ReadCounties(prefixes, max(1, runtime.NumCPU()/2)) {
 		pre, allSides, err := county.Prefix, county.Sides, county.Err
 		if err != nil {
-			fmt.Printf("Error from ustigerline.ReadStreetSides(): %s\n", err)
+			log.Printf("Error from ustigerline.ReadStreetSides(): %s", err)
 			continue
 		}
+		log.Printf("Read %s: %d street sides", pre, len(allSides))
 
 		statefips := pre[len(pre)-5 : len(pre)-3]
 		countyfips := pre[len(pre)-3:]
@@ -163,7 +165,7 @@ func main() {
 		// evidence for them, are in internal/areazip.
 		countyzip := areazip.Sole(stateZips, countyZips, stateInfo.USPS, countyfips)
 		if len(countyzip) > 0 && areazip.Contradicted(allSides, countyzip) {
-			fmt.Printf("Note: address ranges in %s name a ZIP Code other than %s, so it is not lent\n", pre, countyzip)
+			log.Printf("Note: address ranges in %s name a ZIP Code other than %s, so it is not lent", pre, countyzip)
 			countyzip = ""
 		}
 
@@ -283,7 +285,7 @@ func main() {
 			}
 		}
 	}
-	fmt.Printf("Counts - zip-city: %d (%d from GeoNames) zip-street: %d city-street: %d street-only: %d\n",
+	log.Printf("Counts - zip-city: %d (%d from GeoNames) zip-street: %d city-street: %d street-only: %d",
 		numZip2City, numGeonamesZip2City, numZip2Sreet, numCity2Street, numStreetOnly)
 
 	// Initialize Bloom Filters
@@ -549,7 +551,7 @@ var allCompiledFilters = map[string]CompiledFilter{
 	if err := os.WriteFile(outName, formatted, 0644); err != nil {
 		panic(err)
 	}
-	fmt.Printf("Successfully generated %s\n", outName)
+	log.Printf("Successfully generated %s", outName)
 }
 
 // absentRows puts the absent-source report in a fixed order, so that two

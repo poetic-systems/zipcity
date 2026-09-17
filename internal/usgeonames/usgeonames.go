@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -192,7 +193,7 @@ func downloadPostalCodeZip(country string) (string, error) {
 	defer out.Close()
 
 	fileurl := baseURL + country + ".zip"
-	fmt.Printf("Downloading %s to %s\n", fileurl, localpath)
+	log.Printf("Downloading %s to %s", fileurl, localpath)
 	resp, err := http.Get(fileurl)
 	if err != nil {
 		os.Remove(localpath)
@@ -224,7 +225,7 @@ func downloadPostalCodeZip(country string) (string, error) {
 	}
 	defer reader.Close()
 
-	fmt.Printf("Downloaded all %d bytes of %s\n", bytesWritten, localpath)
+	log.Printf("Downloaded all %d bytes of %s", bytesWritten, localpath)
 
 	return localpath, nil
 }
