@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"text/template"
@@ -140,8 +141,12 @@ func main() {
 	numZip2Sreet := uint(0)
 	numCity2Street := uint(0)
 	numStreetOnly := uint(0)
-	for _, pre := range prefixes {
-		allSides, err := ustigerline.ReadStreetSides(pre)
+	// Reading a county is most of a generation and each one is independent,
+	// so they are read several at a time and merged here in order. Half the
+	// CPUs is a working guess: the largest county (Los Angeles) reads in
+	// about 2.5 GB, the rest in far less. See #46.
+	for county := range ustigerline.ReadCounties(prefixes, max(1, runtime.NumCPU()/2)) {
+		pre, allSides, err := county.Prefix, county.Sides, county.Err
 		if err != nil {
 			fmt.Printf("Error from ustigerline.ReadStreetSides(): %s\n", err)
 			continue
