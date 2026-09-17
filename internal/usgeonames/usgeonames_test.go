@@ -16,6 +16,9 @@ const usRows = "" +
 	"US\t10001\tNorth Fairhaven\tExample State\tXA\tExample County\t001\t\t\t40.0\t-70.0\t4\n" +
 	"US\t10002\tAPO AE\t\t\t\t\t\t\t40.0\t-70.0\t4\n" +
 	"US\t10003\tAPO STA\t\t\t\t\t\t\t40.0\t-70.0\t4\n" +
+	"US\t09601\tAPO AA\t\t\t\t\t\t\t40.0\t-70.0\t4\n" +
+	"US\t34001\tFPO AA\t\t\t\t\t\t\t40.0\t-70.0\t4\n" +
+	"US\t96301\tAPO STA\t\t\t\t\t\t\t40.0\t-70.0\t4\n" +
 	"CA\tX0X0X0\tSomewhere Else\tExample Province\tXP\t\t\t\t\t40.0\t-70.0\t4\n"
 
 const prRows = "" +
@@ -77,6 +80,9 @@ func TestTheStateComesFromWhicheverColumnHoldsIt(t *testing.T) {
 		{"a territory takes its state from the country", "00999", "Villa Ejemplo", "PR"},
 		{"a military post office splits city from state", "10002", "APO", "AE"},
 		{"an unrecognized trailing word is left alone", "10003", "APO STA", ""},
+		{"a European service area is AE whatever the row says", "09601", "APO", "AE"},
+		{"the Americas service area is AA", "34001", "FPO", "AA"},
+		{"a Pacific service area is AP even with no state in the row", "96301", "APO", "AP"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -181,7 +187,7 @@ func TestAnAreaCollectsEveryZipCodeNamedWithinIt(t *testing.T) {
 	}
 
 	// A ZIP Code named twice, once per place name, is one ZIP Code.
-	for area, want := range map[string][]string{"XA": {"10001"}, "AE": {"10002"}, "PR": {"00999"}, "AS": {"96999"}} {
+	for area, want := range map[string][]string{"XA": {"10001"}, "AE": {"10002", "09601"}, "PR": {"00999"}, "AS": {"96999"}} {
 		if !slices.Equal(bystate[area], want) {
 			t.Errorf("ZIP Codes for state %s: got %v, want %v", area, bystate[area], want)
 		}

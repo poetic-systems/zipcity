@@ -233,6 +233,24 @@ func downloadPostalCodeZip(country string) (string, error) {
 // Armed Forces Americas, Europe and Pacific.
 var militaryStates = []string{"AA", "AE", "AP"}
 
+// militaryState is the state the Postal Service assigns to an overseas
+// military ZIP Code by its three-digit service area: 090-098 Armed Forces
+// Europe, 340 Armed Forces Americas, 962-966 Armed Forces Pacific. Any other
+// ZIP Code yields "".
+//
+// See https://faq.usps.com/s/article/How-Do-I-Address-Military-Mail.
+func militaryState(postalcode string) string {
+	switch area := postalcode[:min(3, len(postalcode))]; {
+	case "090" <= area && area <= "098":
+		return "AE"
+	case area == "340":
+		return "AA"
+	case "962" <= area && area <= "966":
+		return "AP"
+	}
+	return ""
+}
+
 // overseasMilitary splits a military post office row into its city and state.
 //
 // GeoNames leaves admin code1 blank for these and writes the pair into the
@@ -241,15 +259,20 @@ var militaryStates = []string{"AA", "AE", "AP"}
 // checking a city against a state would otherwise be handed "APO AE" as a
 // city name that no address ever writes.
 //
-// The split only happens when the trailing word is one of the three military
-// state codes. The file also holds a single "APO STA", which is not one of
-// them and is left alone rather than guessed at.
-func overseasMilitary(placename, state string) (string, string) {
+// Within the three military service areas the state comes from the ZIP Code,
+// not the place name: GeoNames files every Pacific post office under AA,
+// some European ones too, and one as "APO STA". Outside them the trailing
+// word is used when it is one of the three military state codes, and the row
+// is otherwise left alone rather than guessed at.
+func overseasMilitary(postalcode, placename, state string) (string, string) {
 	if len(state) > 0 {
 		return placename, state
 	}
 
 	city, military, found := strings.Cut(placename, " ")
+	if usps := militaryState(postalcode); usps != "" {
+		return city, usps
+	}
 	if !found || !slices.Contains(militaryStates, military) {
 		return placename, state
 	}
@@ -299,7 +322,7 @@ func ReadUSPostalPlaces(archivepath string, placeFn PostalPlaceFunc) error {
 			continue
 		}
 
-		place, state := overseasMilitary(row[colPlaceName], stateUSPS(country, row[colStateUSPS]))
+		place, state := overseasMilitary(row[colPostalCode], row[colPlaceName], stateUSPS(country, row[colStateUSPS]))
 
 		err = placeFn(&PostalPlace{
 			Country:    country,
