@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -224,7 +225,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("unable to associate city data to side data: %s\n", err)
+		log.Printf("unable to associate city data to side data: %s", err)
 		// return nil, fmt.Errorf("unable to associate city data to side data: %w", err)
 	}
 
@@ -254,7 +255,7 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("unable to associate address range data to side data: %s\n", err)
+		log.Printf("unable to associate address range data to side data: %s", err)
 		// return nil, fmt.Errorf("unable to associate address range data to side data: %w", err)
 	}
 
@@ -356,7 +357,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 	// fmt.Printf("Reading %s\n", facesDbfPath)
 	faces, err := readRecords(facesDbfPath)
 	if err != nil {
-		fmt.Printf("Error reading %s: %s\n", facesDbfPath, err)
+		log.Printf("Error reading %s: %s", facesDbfPath, err)
 		return err
 	}
 
@@ -366,7 +367,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 		rawTFID, found := facefields["TFID"]
 		if !found {
 			out, _ := json.MarshalIndent(facefields, "", "  ")
-			fmt.Printf("No TFID found in %s\n", out)
+			log.Printf("No TFID found in %s", out)
 			continue
 		}
 		tfid := fieldutil.AsString(rawTFID)
@@ -392,7 +393,7 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 
 	places, err := readRecords(placeDbfPath)
 	if err != nil {
-		fmt.Printf("Error reading %s: %s\n", placeDbfPath, err)
+		log.Printf("Error reading %s: %s", placeDbfPath, err)
 		return err
 	}
 
@@ -738,7 +739,7 @@ func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
 	}
 	defer out.Close()
 
-	fmt.Printf("Downloading %s to %s\n", fileurl.String(), localpath)
+	log.Printf("Downloading %s to %s", fileurl.String(), localpath)
 	resp, err := http.Get(fileurl.String())
 	if err != nil {
 		return err
@@ -750,10 +751,10 @@ func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
 
 		Your support ID is: 13427891559851952768"
 	*/
-	fmt.Println("Status Code:", resp.StatusCode)
+	log.Println("Status Code:", resp.StatusCode)
 	expectedSize := resp.ContentLength
 	if expectedSize == -1 {
-		fmt.Println("Warning: Server did not provide Content-Length header")
+		log.Println("Warning: Server did not provide Content-Length header")
 	}
 	defer resp.Body.Close()
 
@@ -764,7 +765,7 @@ func downloadTigerfileZip(fileurl *url.URL, dir *os.File) error {
 		return fmt.Errorf("Incomplete download! Got %d of %d bytes\n", bytesWritten, expectedSize)
 	}
 
-	fmt.Printf("Downloaded all %d bytes of %s\n", bytesWritten, localpath)
+	log.Printf("Downloaded all %d bytes of %s", bytesWritten, localpath)
 	out.Close() // this will get called twice!
 	// <-time.After(200 * time.Millisecond)
 
