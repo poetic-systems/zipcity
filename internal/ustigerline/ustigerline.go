@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/poetic-systems/zipcity/internal/ustigerline/featnames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline/fieldutil"
-	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-shapefile"
 )
 
@@ -84,7 +84,6 @@ type StreetInfo struct {
 	Name       string
 	Alt        []string
 	Attributes map[string]any
-	Geo        geom.T
 }
 
 type CityFunc func(info *CityInfo) error
@@ -93,7 +92,6 @@ type CityInfo struct {
 	TFID       []string
 	Name       string
 	Attributes map[string]any
-	Geo        geom.T
 }
 
 type StateInfo struct {
@@ -133,16 +131,13 @@ type StreetSide struct {
 func ReadStates(fileprefix string) (map[string]*StateInfo, error) {
 	statesDbfPath := filepath.Join(storagedir, "state", fmt.Sprintf("%s_us_state.zip", fileprefix))
 
-	usstates, err := shapefile.ReadZipFile(statesDbfPath, nil)
+	usstates, err := readRecords(statesDbfPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(statesDbfPath)
-		}
-		return nil, fmt.Errorf("unable to read %s: %w", statesDbfPath, err)
+		return nil, err
 	}
 
 	stateMap := make(map[string]*StateInfo)
-	for usst := range usstates.Records() {
+	for usst := range usstates {
 		stfips := fieldutil.AsString(usst["STATEFP"])
 		stname := fieldutil.AsString(usst["NAME"])
 		stusps := fieldutil.AsString(usst["STUSPS"])
@@ -266,15 +261,56 @@ func ReadStreetSides(fileprefix string) (map[string]*StreetSide, error) {
 	return allSides, nil
 }
 
+// readRecords reads the attribute table of a TIGER archive and yields its
+// records in file order. Only the .dbf member is decoded, in the character
+// set the .cpg member names: nothing here uses the .shp geometry, and for
+// the state-wide place file, read once per county, the polygons are near
+// enough all of the file. See #46.
+func readRecords(zippath string) (iter.Seq[map[string]any], error) {
+	archive, err := zip.OpenReader(zippath)
+	if err != nil {
+		if errors.Is(err, zip.ErrFormat) {
+			os.Remove(zippath)
+		}
+		return nil, fmt.Errorf("unable to read %s: %w", zippath, err)
+	}
+	defer archive.Close()
+
+	members := map[string]*zip.File{}
+	for _, member := range archive.File {
+		members[strings.ToLower(path.Ext(member.Name))] = member
+	}
+	options := &shapefile.ReadDBFOptions{}
+	if cpgFile, ok := members[".cpg"]; ok {
+		cpg, err := shapefile.ReadCPGZipFile(cpgFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read %s: %w", zippath, err)
+		}
+		options.Charset = cpg.Charset
+	}
+	dbfFile, ok := members[".dbf"]
+	if !ok {
+		return nil, fmt.Errorf("unable to read %s: no .dbf member", zippath)
+	}
+	dbf, err := shapefile.ReadDBFZipFile(dbfFile, options)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %s: %w", zippath, err)
+	}
+	return func(yield func(map[string]any) bool) {
+		for i := range dbf.Records {
+			if !yield(dbf.Record(i)) {
+				return
+			}
+		}
+	}, nil
+}
+
 func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 	addrDbfPath := filepath.Join(storagedir, "addr", fmt.Sprintf("%s_addr.zip", fileprefix))
 
-	addressranges, err := shapefile.ReadZipFile(addrDbfPath, nil)
+	addressranges, err := readRecords(addrDbfPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(addrDbfPath)
-		}
-		return fmt.Errorf("unable to read %s: %w", addrDbfPath, err)
+		return err
 	}
 
 	// addressranges has TLID to tie address ranges back to edges. Each address range
@@ -283,7 +319,7 @@ func ReadAddressRanges(fileprefix string, addrFn AddressRangeFunc) error {
 	// TFID in the edge record for the side of the road the address range is on. Loosely,
 	// because we are not tying the zipcode to where on the road the address range occurs
 	// (yet.)
-	for ar := range addressranges.Records() {
+	for ar := range addressranges {
 		// TLID is the TIGER/Line ID. It is used to link the address range from the
 		// addr.zip to the edge from edges.zip. It is type int.
 		rawTLID, found := ar["TLID"]
@@ -318,16 +354,13 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 	placefpMap := make(map[string]*CityInfo)
 
 	// fmt.Printf("Reading %s\n", facesDbfPath)
-	faces, err := shapefile.ReadZipFile(facesDbfPath, nil)
+	faces, err := readRecords(facesDbfPath)
 	if err != nil {
 		fmt.Printf("Error reading %s: %s\n", facesDbfPath, err)
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(facesDbfPath)
-		}
 		return err
 	}
 
-	for facefields := range faces.Records() {
+	for facefields := range faces {
 		// TFID is the TIGER/Face ID. It is used to link the "face" from the
 		// faces.zip to the place (generally a city) from place.zip. It is type int.
 		rawTFID, found := facefields["TFID"]
@@ -357,16 +390,13 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 		}
 	}
 
-	places, err := shapefile.ReadZipFile(placeDbfPath, nil)
+	places, err := readRecords(placeDbfPath)
 	if err != nil {
 		fmt.Printf("Error reading %s: %s\n", placeDbfPath, err)
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(placeDbfPath)
-		}
 		return err
 	}
 
-	for pl, geometry := range places.Records() {
+	for pl := range places {
 		rawPlaceFP, found := pl["PLACEFP"]
 		if !found {
 			// out, _ := json.MarshalIndent(pl, "", "  ")
@@ -391,7 +421,6 @@ func ReadFacesAndPlaces(fileprefix string, cityFn CityFunc) error {
 		}
 		ctyInfo.Name = strings.ToUpper(fmt.Sprintf("%s", pl["NAME"]))
 		ctyInfo.Attributes = pl
-		ctyInfo.Geo = geometry
 
 		// out, _ := json.MarshalIndent(ctyInfo, "", "  ")
 		// fmt.Printf("%s\n", out)
@@ -411,15 +440,12 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 
 	featnameIndex := make(map[string]*StreetInfo)
 
-	features, err := shapefile.ReadZipFile(featnamesDbfPath, nil)
+	features, err := readRecords(featnamesDbfPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(featnamesDbfPath)
-		}
 		return err
 	}
 
-	for fields := range features.Records() {
+	for fields := range features {
 		// TLID is the TIGER/Line ID. It is used to link the feature from the
 		// featnames.zip to the edge from edges.zip. It is type int.
 		// A featurename record should exist for every possible name of an edge.
@@ -457,15 +483,12 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		}
 	}
 
-	edges, err := shapefile.ReadZipFile(edgesShpPath, nil)
+	edges, err := readRecords(edgesShpPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "not a valid zip file") {
-			os.Remove(edgesShpPath)
-		}
 		return err
 	}
 
-	for attributes, geometry := range edges.Records() {
+	for attributes := range edges {
 		rawTLID, found := attributes["TLID"]
 		if !found {
 			continue
@@ -482,7 +505,6 @@ func ReadFeaturesAndEdges(fileprefix string, shapeFn StreetFunc) error {
 		}
 
 		stInfo.Attributes = attributes
-		stInfo.Geo = geometry
 
 		err := shapeFn(stInfo)
 		if err != nil {
