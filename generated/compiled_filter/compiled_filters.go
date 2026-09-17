@@ -9,9 +9,11 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/bloomfilename"
+	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
@@ -61,6 +63,22 @@ var bloom_filters = maps.Collect(func(yield func(CompiledFilter, *bloom.BloomFil
 			return
 		}
 	}
+})
+
+//go:embed zip-city-names.tsv
+var zipCityNames []byte
+
+// ZipCityNames is the ZIP Code to city name table the zip-city filter was
+// built from, decoded on first use so a caller who only asks the filters
+// pays for the bytes and nothing more. The file is written by the same
+// generation that reads it back, so failing to read it is a build defect,
+// and fails the way an unreadable filter does.
+var ZipCityNames = sync.OnceValue(func() zipcities.Table {
+	t, err := zipcities.Decode(bytes.NewReader(zipCityNames))
+	if err != nil {
+		panic(fmt.Errorf("Failed to read zip-city names: %w", err))
+	}
+	return t
 })
 
 func toCompiledFilter(in string) (CompiledFilter, error) {

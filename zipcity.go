@@ -2,6 +2,8 @@ package zipcity
 
 import (
 	"fmt"
+	"iter"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -178,4 +180,27 @@ func MatchCityStateAndStreet(city, state, street string) (Match, error) {
 	}
 
 	return match(f, func(s string) string { return bloomkeys.KeyCityStateStreet(city, state, s) }, street), nil
+}
+
+// CitiesKnownFor yields the state and city names seen for a ZIP Code —
+// GeoNames postal cities and the TIGER place names beside its streets — each
+// under the state its source placed it in, states ascending and names
+// ascending within a state. It is the relation CheckZipAndCity is built
+// from, read out for a caller holding a ZIP Code and no city to ask about.
+//
+// It is a starting point, not an answer: the list is neither complete nor
+// preferred-first, and a name's absence from it is not evidence against that
+// name. A code nothing was seen for yields nothing. See
+// poetic-systems/zipcity#17.
+func CitiesKnownFor(zip string) iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		states := compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)]
+		for _, state := range slices.Sorted(maps.Keys(states)) {
+			for _, city := range states[state] {
+				if !yield(state, city) {
+					return
+				}
+			}
+		}
+	}
 }
