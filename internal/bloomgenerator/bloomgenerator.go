@@ -82,7 +82,6 @@ func main() {
 	zipStreetData := map[string]map[string]ZipStreetTuple{}
 	zipCityData := map[string]ZipCityTuple{}
 	cityStreetData := map[string]map[string]CityStreetTuple{}
-	streetOnlyData := map[string]*ustigerline.StreetSide{}
 
 	// Cache the census data locally if we don't already have it
 	prefixes, absent, err := ustigerline.DownloadAllRequiredTigerfiles()
@@ -280,7 +279,6 @@ func main() {
 				}
 			}
 			if len(street) > 0 && len(cty) == 0 && len(zips) == 0 {
-				streetOnlyData[street] = side
 				numStreetOnly += 1
 			}
 		}
