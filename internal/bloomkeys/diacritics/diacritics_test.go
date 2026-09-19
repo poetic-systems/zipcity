@@ -40,3 +40,17 @@ func TestFold(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkFold(b *testing.B) {
+	for _, tc := range []struct{ Name, In string }{
+		{"ascii", "CALLEJON MONSO MENDEZ"},
+		{"folded", "CALLEJÓN MONSO MÉNDEZ"},
+	} {
+		b.Run(tc.Name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				diacritics.Fold(tc.In)
+			}
+		})
+	}
+}

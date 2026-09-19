@@ -11,6 +11,7 @@ package diacritics
 import (
 	"maps"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/poetic-systems/addresstables/diacritics"
 	"golang.org/x/text/runes"
@@ -42,10 +43,27 @@ func substitute(r rune) rune {
 // Fold substitutes every Appendix A character with the letter the appendix
 // prints for it, keeping the input's case, then strips combining marks from
 // whatever is left.
+//
+// ASCII is left alone without touching the chain: every substitute is a
+// non-ASCII rune and no ASCII rune decomposes, so the chain would return the
+// input unchanged, and it costs three 4 KB buffers per call to find that
+// out. Nearly every key part is ASCII, and the generator builds ~300 M keys.
 func Fold(s string) string {
+	if isASCII(s) {
+		return s
+	}
 	t := transform.Chain(runes.Map(substitute), norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	// None of the chained transformers can fail: invalid UTF-8 is replaced with
 	// U+FFFD rather than reported.
 	folded, _, _ := transform.String(t, s)
 	return folded
+}
+
+func isASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
