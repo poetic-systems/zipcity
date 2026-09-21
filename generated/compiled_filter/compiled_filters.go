@@ -18,11 +18,17 @@ import (
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
-// FalsePositiveRate is the false positive rate every filter in this package
-// was built with (bloom.NewWithEstimates in
-// internal/bloomgenerator/bloomgenerator.go). It is generated here, beside
-// the filters, so it cannot drift from what they were actually built with.
-const FalsePositiveRate = 0.005
+// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
+// CityStreetFalsePositiveRate are the false positive rates the zip-street,
+// zip-city, and city-street filters in this package were each built with
+// (bloom.NewWithEstimates in internal/bloomgenerator/bloomgenerator.go).
+// They are generated here, beside the filters, so none of them can drift
+// from what its filter was actually built with.
+const (
+	ZipStreetFalsePositiveRate  = 0.005
+	ZipCityFalsePositiveRate    = 0.005
+	CityStreetFalsePositiveRate = 0.005
+)
 
 // AbsentSources names, per TIGER area code, the source file types the Census
 // Bureau published nothing of at generation time. Read off the Census Bureau's

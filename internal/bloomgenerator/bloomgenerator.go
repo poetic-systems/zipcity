@@ -30,11 +30,21 @@ import (
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
-// falsePositiveRate is the false positive rate every filter below is built
-// with. It is written into the generated compiled_filter package beside the
-// filters (as FalsePositiveRate) so a caller weighing a Match can read the
-// rate it was actually generated with instead of a copy that can drift.
-const falsePositiveRate = 0.005
+// zipStreetFalsePositiveRate, zipCityFalsePositiveRate, and
+// cityStreetFalsePositiveRate are the false positive rates the zip-street,
+// zip-city, and city-street filters are each built with. They are written
+// into the generated compiled_filter package beside the filters (as
+// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
+// CityStreetFalsePositiveRate) so a caller weighing a Match can read the
+// rate a filter was actually generated with instead of a copy that can
+// drift. They are separate constants, rather than one shared by every
+// filter, so that one filter type's rate can move without an API change to
+// the rest — see poetic-systems/zipcity#53.
+const (
+	zipStreetFalsePositiveRate  = 0.005
+	zipCityFalsePositiveRate    = 0.005
+	cityStreetFalsePositiveRate = 0.005
+)
 
 type ZipStreetTuple struct {
 	Zip    string
@@ -306,7 +316,7 @@ func main() {
 		numThisZip2Street := uint(len(streets))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nZS := numThisZip2Street + (numThisZip2Street >> 3)
-		streetFilter := bloom.NewWithEstimates(nZS, falsePositiveRate)
+		streetFilter := bloom.NewWithEstimates(nZS, zipStreetFalsePositiveRate)
 
 		for key := range streets {
 			streetFilter.Add([]byte(key))
@@ -350,7 +360,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nZC := numZip2City + (numZip2City >> 3)
-	cityFilter := bloom.NewWithEstimates(nZC, falsePositiveRate)
+	cityFilter := bloom.NewWithEstimates(nZC, zipCityFalsePositiveRate)
 
 	for key := range zipCityData {
 		cityFilter.Add([]byte(key))
@@ -375,7 +385,7 @@ func main() {
 		numThisCity2Street := uint(len(stateCityStreetData))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nCS := numThisCity2Street + (numThisCity2Street >> 3)
-		cityStreetFilter := bloom.NewWithEstimates(nCS, falsePositiveRate)
+		cityStreetFilter := bloom.NewWithEstimates(nCS, cityStreetFalsePositiveRate)
 
 		for key := range stateCityStreetData {
 			cityStreetFilter.Add([]byte(key))
@@ -419,11 +429,17 @@ import (
 
 var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
 
-// FalsePositiveRate is the false positive rate every filter in this package
-// was built with (bloom.NewWithEstimates in
-// internal/bloomgenerator/bloomgenerator.go). It is generated here, beside
-// the filters, so it cannot drift from what they were actually built with.
-const FalsePositiveRate = {{ .FalsePositiveRate }}
+// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
+// CityStreetFalsePositiveRate are the false positive rates the zip-street,
+// zip-city, and city-street filters in this package were each built with
+// (bloom.NewWithEstimates in internal/bloomgenerator/bloomgenerator.go).
+// They are generated here, beside the filters, so none of them can drift
+// from what its filter was actually built with.
+const (
+	ZipStreetFalsePositiveRate  = {{ .ZipStreetFalsePositiveRate }}
+	ZipCityFalsePositiveRate    = {{ .ZipCityFalsePositiveRate }}
+	CityStreetFalsePositiveRate = {{ .CityStreetFalsePositiveRate }}
+)
 
 // AbsentSources names, per TIGER area code, the source file types the Census
 // Bureau published nothing of at generation time. Read off the Census Bureau's
@@ -563,11 +579,13 @@ var allCompiledFilters = map[string]CompiledFilter{
 	// so the generated package is gofmt-clean however the template is written.
 	var rendered bytes.Buffer
 	err = t.Execute(&rendered, map[string]interface{}{
-		"ZSFiles":           zipstreetfiles,
-		"CSFiles":           citystreetfiles,
-		"Absent":            absentRows(absent),
-		"Now":               now.UTC().Format(time.RFC3339),
-		"FalsePositiveRate": falsePositiveRate,
+		"ZSFiles":                     zipstreetfiles,
+		"CSFiles":                     citystreetfiles,
+		"Absent":                      absentRows(absent),
+		"Now":                         now.UTC().Format(time.RFC3339),
+		"ZipStreetFalsePositiveRate":  zipStreetFalsePositiveRate,
+		"ZipCityFalsePositiveRate":    zipCityFalsePositiveRate,
+		"CityStreetFalsePositiveRate": cityStreetFalsePositiveRate,
 	})
 	if err != nil {
 		panic(err)
