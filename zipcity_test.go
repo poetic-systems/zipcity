@@ -260,12 +260,18 @@ func TestMatchStreet(t *testing.T) {
 	}
 }
 
-// TestFalsePositiveRate pins the rate the checked-in filters were built
-// with, so a caller weighing a Match's Asked against it is weighing the
+// TestFalsePositiveRate pins the rates the checked-in filters were built
+// with, so a caller weighing a Match's Asked against one is weighing the
 // right number.
 func TestFalsePositiveRate(t *testing.T) {
-	if zipcity.FalsePositiveRate != 0.005 {
-		t.Fatalf("FalsePositiveRate = %v, want 0.005", zipcity.FalsePositiveRate)
+	if zipcity.ZipStreetFalsePositiveRate != 0.005 {
+		t.Fatalf("ZipStreetFalsePositiveRate = %v, want 0.005", zipcity.ZipStreetFalsePositiveRate)
+	}
+	if zipcity.ZipCityFalsePositiveRate != 0.005 {
+		t.Fatalf("ZipCityFalsePositiveRate = %v, want 0.005", zipcity.ZipCityFalsePositiveRate)
+	}
+	if zipcity.CityStreetFalsePositiveRate != 0.005 {
+		t.Fatalf("CityStreetFalsePositiveRate = %v, want 0.005", zipcity.CityStreetFalsePositiveRate)
 	}
 }
 

@@ -16,21 +16,30 @@ import (
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
-// FalsePositiveRate is the false positive rate every compiled filter was
-// built with. Each key a filter is asked is independently wrong at this
-// rate; Asked is how many keys a Match asked, for weighing the chance that
-// any of them was.
-const FalsePositiveRate = compiled_filter.FalsePositiveRate
+// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
+// CityStreetFalsePositiveRate are the false positive rates the zip-street,
+// zip-city, and city-street compiled filters were each built with. Each key
+// a filter is asked is independently wrong at its own filter's rate; Asked
+// is how many keys a Match asked, for weighing the chance that any of them
+// was. They are separate constants, rather than one shared rate, so that
+// one filter type's rate can change without changing the others' API.
+const (
+	ZipStreetFalsePositiveRate  = compiled_filter.ZipStreetFalsePositiveRate
+	ZipCityFalsePositiveRate    = compiled_filter.ZipCityFalsePositiveRate
+	CityStreetFalsePositiveRate = compiled_filter.CityStreetFalsePositiveRate
+)
 
 // Match is how a street was found: the street itself is in the filter, or
 // it is not but directional variants of it are (W FOX PARK DR for FOX PARK
-// DR). Every key a filter says yes to is wrong independently at
-// FalsePositiveRate, no matter how many keys were asked to get there — but
-// Asked, how many were asked (1 for an exact hit; 1 plus the number of
-// variants tried otherwise), bounds the chance that *any* reported variant
-// is spurious: 1-(1-FalsePositiveRate)^Asked. A caller who does not know
-// whether the input's directional was wrong or missing needs that bound,
-// not just the variants themselves.
+// DR). Every key a filter says yes to is wrong independently at the rate
+// its filter was built with — ZipStreetFalsePositiveRate for
+// MatchZipAndStreet, CityStreetFalsePositiveRate for
+// MatchCityStateAndStreet — no matter how many keys were asked to get
+// there. But Asked, how many were asked (1 for an exact hit; 1 plus the
+// number of variants tried otherwise), bounds the chance that *any*
+// reported variant is spurious: 1-(1-rate)^Asked. A caller who does not
+// know whether the input's directional was wrong or missing needs that
+// bound, not just the variants themselves.
 type Match struct {
 	Exact    bool
 	Variants []string
