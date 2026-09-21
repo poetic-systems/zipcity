@@ -305,3 +305,46 @@ func TestCitiesKnownForAgreeWithCheckZipAndCity(t *testing.T) {
 		}
 	}
 }
+
+func TestZipsKnownFor(t *testing.T) {
+	got := slices.Collect(zipcity.ZipsKnownFor("UT", "West Jordan"))
+	if !slices.Contains(got, "84088") {
+		t.Errorf("ZipsKnownFor(UT, West Jordan) = %v, want it to contain 84088", got)
+	}
+
+	// A city nothing was seen for yields nothing.
+	if got := slices.Collect(zipcity.ZipsKnownFor("UT", "Nowhereville")); got != nil {
+		t.Errorf("ZipsKnownFor(UT, Nowhereville) = %v, want nothing", got)
+	}
+
+	// West Palm Beach and Palm Beach are both known in Florida, and neither
+	// ZIP Code list is empty, but they are different places: no ZIP Code
+	// carries both names.
+	westPalmBeach := slices.Collect(zipcity.ZipsKnownFor("FL", "West Palm Beach"))
+	palmBeach := slices.Collect(zipcity.ZipsKnownFor("FL", "Palm Beach"))
+	if len(westPalmBeach) == 0 || len(palmBeach) == 0 {
+		t.Fatalf("ZipsKnownFor(FL, West Palm Beach) = %v, ZipsKnownFor(FL, Palm Beach) = %v, want both non-empty", westPalmBeach, palmBeach)
+	}
+	for _, zip := range palmBeach {
+		if slices.Contains(westPalmBeach, zip) {
+			t.Errorf("%q is in both ZipsKnownFor(FL, West Palm Beach) and ZipsKnownFor(FL, Palm Beach)", zip)
+		}
+	}
+}
+
+// ZipsKnownFor is CitiesKnownFor read the other way: every code it yields
+// for a city and state must itself yield that city under that state.
+func TestZipsKnownForRoundTripsWithCitiesKnownFor(t *testing.T) {
+	for zip := range zipcity.ZipsKnownFor("UT", "West Jordan") {
+		found := false
+		for state, city := range zipcity.CitiesKnownFor(zip) {
+			if state == "UT" && city == "WEST JORDAN" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ZipsKnownFor(UT, West Jordan) yielded %q, but CitiesKnownFor(%q) does not carry WEST JORDAN under UT", zip, zip)
+		}
+	}
+}

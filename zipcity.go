@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/addresstables/directionals"
@@ -200,6 +201,47 @@ func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 				if !yield(state, city) {
 					return
 				}
+			}
+		}
+	}
+}
+
+// zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
+// to city names — into state and city to the ZIP Codes seen there, keyed
+// the way the zip-city filter keys a city (bloomkeys.Normalize the state,
+// bloomkeys.City the name) so a caller's spelling and case do not matter.
+// Built once on first use and sorted then, rather than on every call, since
+// the table it inverts is itself fixed for the life of the process.
+var zipsByStateCity = sync.OnceValue(func() map[string][]string {
+	inverted := map[string][]string{}
+	for zip, states := range compiled_filter.ZipCityNames() {
+		for state, cities := range states {
+			for _, city := range cities {
+				key := state + ":" + city
+				inverted[key] = append(inverted[key], zip)
+			}
+		}
+	}
+	for key := range inverted {
+		slices.Sort(inverted[key])
+	}
+	return inverted
+})
+
+// ZipsKnownFor yields the ZIP Codes a city name has been seen for in a
+// state, ascending. It is CitiesKnownFor read the other way, for a caller
+// holding a city and state and no ZIP Code to ask about.
+//
+// It is a starting point, not an answer: the list is neither complete nor
+// preferred-first, and a code's absence from it is not evidence against
+// that code. A city nothing was seen for yields nothing. See
+// poetic-systems/addressparsers#17.
+func ZipsKnownFor(state, city string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		key := bloomkeys.Normalize(state) + ":" + bloomkeys.City(city)
+		for _, zip := range zipsByStateCity()[key] {
+			if !yield(zip) {
+				return
 			}
 		}
 	}
