@@ -212,21 +212,28 @@ func TestMatchStreet(t *testing.T) {
 	// A Bloom filter can only promise the keys it holds, so, like the
 	// Check tests above, these assert presence and never absence: a
 	// regeneration is free to answer yes to a variant that is not there.
+	// Asked is deterministic regardless of which variants a filter says yes
+	// to: an exact hit never tries a variant (Asked 1), and a street with no
+	// directional on either end tries all eight Pub 28 directionals on both
+	// ends (Asked 1+2*8).
+	const variantsAsked = 1 + 2*8
+
 	cases := []struct {
-		Street string
-		City   string
-		State  string
-		Zip    string
-		Want   zipcity.Match
+		Street    string
+		City      string
+		State     string
+		Zip       string
+		Want      zipcity.Match
+		WantAsked int
 	}{
-		{"W Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}},
+		{"W Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}, 1},
 		// TIGER attaches the W that a caller who knows the street as Fox
 		// Park Dr does not have (#4).
-		{"Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Variants: []string{"W FOX PARK DR"}}},
+		{"Fox Park Dr", "West Jordan", "UT", "84088", zipcity.Match{Variants: []string{"W FOX PARK DR"}}, variantsAsked},
 		// A street already carrying a directional on one side is only tried
 		// with one on the other.
-		{"9200 S", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}},
-		{"M St", "Washington", "DC", "20002", zipcity.Match{Variants: []string{"M ST NE"}}},
+		{"9200 S", "West Jordan", "UT", "84088", zipcity.Match{Exact: true}, 1},
+		{"M St", "Washington", "DC", "20002", zipcity.Match{Variants: []string{"M ST NE"}}, variantsAsked},
 	}
 
 	for _, tc := range cases {
@@ -237,6 +244,9 @@ func TestMatchStreet(t *testing.T) {
 		if !holds(got, tc.Want) {
 			t.Fatalf("Expected zip: '%s' and street: '%s' to match %+v, got %+v", tc.Zip, tc.Street, tc.Want, got)
 		}
+		if got.Asked != tc.WantAsked {
+			t.Fatalf("Expected zip: '%s' and street: '%s' to have Asked %d, got %d", tc.Zip, tc.Street, tc.WantAsked, got.Asked)
+		}
 	}
 	city, err := zipcity.MatchCityStateAndStreet("Washington", "DC", "M St")
 	if err != nil {
@@ -244,6 +254,18 @@ func TestMatchStreet(t *testing.T) {
 	}
 	if !holds(city, zipcity.Match{Variants: []string{"M ST NE", "M ST SE", "M ST NW", "M ST SW"}}) {
 		t.Fatalf("Expected every quadrant of M ST in Washington DC, got %+v", city)
+	}
+	if city.Asked != variantsAsked {
+		t.Fatalf("Expected M St in Washington DC to have Asked %d, got %d", variantsAsked, city.Asked)
+	}
+}
+
+// TestFalsePositiveRate pins the rate the checked-in filters were built
+// with, so a caller weighing a Match's Asked against it is weighing the
+// right number.
+func TestFalsePositiveRate(t *testing.T) {
+	if zipcity.FalsePositiveRate != 0.005 {
+		t.Fatalf("FalsePositiveRate = %v, want 0.005", zipcity.FalsePositiveRate)
 	}
 }
 

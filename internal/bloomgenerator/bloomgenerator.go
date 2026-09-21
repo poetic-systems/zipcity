@@ -30,6 +30,12 @@ import (
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
+// falsePositiveRate is the false positive rate every filter below is built
+// with. It is written into the generated compiled_filter package beside the
+// filters (as FalsePositiveRate) so a caller weighing a Match can read the
+// rate it was actually generated with instead of a copy that can drift.
+const falsePositiveRate = 0.005
+
 type ZipStreetTuple struct {
 	Zip    string
 	Street string
@@ -300,7 +306,7 @@ func main() {
 		numThisZip2Street := uint(len(streets))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nZS := numThisZip2Street + (numThisZip2Street >> 3)
-		streetFilter := bloom.NewWithEstimates(nZS, 0.005)
+		streetFilter := bloom.NewWithEstimates(nZS, falsePositiveRate)
 
 		for key := range streets {
 			streetFilter.Add([]byte(key))
@@ -344,7 +350,7 @@ func main() {
 
 	// Add ~1/8 of overhead to the count for the base capacity
 	nZC := numZip2City + (numZip2City >> 3)
-	cityFilter := bloom.NewWithEstimates(nZC, 0.005)
+	cityFilter := bloom.NewWithEstimates(nZC, falsePositiveRate)
 
 	for key := range zipCityData {
 		cityFilter.Add([]byte(key))
@@ -369,7 +375,7 @@ func main() {
 		numThisCity2Street := uint(len(stateCityStreetData))
 		// Add ~1/8 of overhead to the count for the base capacity
 		nCS := numThisCity2Street + (numThisCity2Street >> 3)
-		cityStreetFilter := bloom.NewWithEstimates(nCS, 0.005)
+		cityStreetFilter := bloom.NewWithEstimates(nCS, falsePositiveRate)
 
 		for key := range stateCityStreetData {
 			cityStreetFilter.Add([]byte(key))
@@ -412,6 +418,12 @@ import (
 )
 
 var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
+
+// FalsePositiveRate is the false positive rate every filter in this package
+// was built with (bloom.NewWithEstimates in
+// internal/bloomgenerator/bloomgenerator.go). It is generated here, beside
+// the filters, so it cannot drift from what they were actually built with.
+const FalsePositiveRate = {{ .FalsePositiveRate }}
 
 // AbsentSources names, per TIGER area code, the source file types the Census
 // Bureau published nothing of at generation time. Read off the Census Bureau's
@@ -551,10 +563,11 @@ var allCompiledFilters = map[string]CompiledFilter{
 	// so the generated package is gofmt-clean however the template is written.
 	var rendered bytes.Buffer
 	err = t.Execute(&rendered, map[string]interface{}{
-		"ZSFiles": zipstreetfiles,
-		"CSFiles": citystreetfiles,
-		"Absent":  absentRows(absent),
-		"Now":     now.UTC().Format(time.RFC3339),
+		"ZSFiles":           zipstreetfiles,
+		"CSFiles":           citystreetfiles,
+		"Absent":            absentRows(absent),
+		"Now":               now.UTC().Format(time.RFC3339),
+		"FalsePositiveRate": falsePositiveRate,
 	})
 	if err != nil {
 		panic(err)

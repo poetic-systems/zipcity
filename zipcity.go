@@ -16,15 +16,25 @@ import (
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
+// FalsePositiveRate is the false positive rate every compiled filter was
+// built with. Each key a filter is asked is independently wrong at this
+// rate; Asked is how many keys a Match asked, for weighing the chance that
+// any of them was.
+const FalsePositiveRate = compiled_filter.FalsePositiveRate
+
 // Match is how a street was found: the street itself is in the filter, or
 // it is not but directional variants of it are (W FOX PARK DR for FOX PARK
-// DR). A variant is a lower-confidence answer — the filter is asked up to
-// sixteen questions instead of one, so it is that much more likely to say
-// yes to a street that is not there — and Variants says which forms it said
-// yes to, so the caller can decide what to make of them.
+// DR). Every key a filter says yes to is wrong independently at
+// FalsePositiveRate, no matter how many keys were asked to get there — but
+// Asked, how many were asked (1 for an exact hit; 1 plus the number of
+// variants tried otherwise), bounds the chance that *any* reported variant
+// is spurious: 1-(1-FalsePositiveRate)^Asked. A caller who does not know
+// whether the input's directional was wrong or missing needs that bound,
+// not just the variants themselves.
 type Match struct {
 	Exact    bool
 	Variants []string
+	Asked    int
 }
 
 // Found is true for an exact match or any variant.
@@ -68,10 +78,11 @@ func directionalVariants(street string) []string {
 // variants only when that misses.
 func match(f *bloom.BloomFilter, key func(street string) string, street string) Match {
 	if f.TestString(key(street)) {
-		return Match{Exact: true}
+		return Match{Exact: true, Asked: 1}
 	}
-	m := Match{}
-	for _, v := range directionalVariants(street) {
+	variants := directionalVariants(street)
+	m := Match{Asked: 1 + len(variants)}
+	for _, v := range variants {
 		if f.TestString(key(v)) {
 			m.Variants = append(m.Variants, v)
 		}
