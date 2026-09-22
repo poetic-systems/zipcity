@@ -17,16 +17,15 @@ import (
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
-// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
-// CityStreetFalsePositiveRate are the false positive rates the zip-street,
-// zip-city, and city-street compiled filters were each built with. Each key
-// a filter is asked is independently wrong at its own filter's rate; Asked
-// is how many keys a Match asked, for weighing the chance that any of them
-// was. They are separate constants, rather than one shared rate, so that
-// one filter type's rate can change without changing the others' API.
+// ZipStreetFalsePositiveRate and CityStreetFalsePositiveRate are the false
+// positive rates the zip-street and city-street compiled filters were each
+// built with. Each key a filter is asked is independently wrong at its own
+// filter's rate; Asked is how many keys a Match asked, for weighing the
+// chance that any of them was. They are separate constants, rather than one
+// shared rate, so that one filter type's rate can change without changing
+// the other's API.
 const (
 	ZipStreetFalsePositiveRate  = compiled_filter.ZipStreetFalsePositiveRate
-	ZipCityFalsePositiveRate    = compiled_filter.ZipCityFalsePositiveRate
 	CityStreetFalsePositiveRate = compiled_filter.CityStreetFalsePositiveRate
 )
 
@@ -146,6 +145,11 @@ func cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
 	return f, nil
 }
 
+// CheckZipAndCity reports whether a city name has been seen for a ZIP Code,
+// state-blind, the way the zip-city filter's key used to be. It is now an
+// exact answer, with no false positive rate to weigh, read straight from
+// compiled_filter.ZipCityNames() — the same table CitiesKnownFor reads. See
+// poetic-systems/zipcity#55.
 func CheckZipAndCity(zip, city string) (bool, error) {
 	if !zip5pattern.MatchString(zip) {
 		return false, fmt.Errorf("5-digit zip code required")
@@ -155,12 +159,13 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 		return false, fmt.Errorf("city required")
 	}
 
-	f, err := compiled_filter.LoadFilter(compiled_filter.ZipCity)
-	if err != nil {
-		return false, fmt.Errorf("Unable to load bloom filter: %w", err)
+	name := bloomkeys.City(city)
+	for _, cities := range compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)] {
+		if slices.Contains(cities, name) {
+			return true, nil
+		}
 	}
-
-	return f.TestString(bloomkeys.KeyZipCity(zip, city)), nil
+	return false, nil
 }
 
 func CheckZipAndStreet(zip, street string) (bool, error) {
@@ -228,7 +233,7 @@ func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 
 // zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
 // to city names — into state and city to the ZIP Codes seen there, keyed
-// the way the zip-city filter keys a city (bloomkeys.Normalize the state,
+// the way CheckZipAndCity keys a city (bloomkeys.Normalize the state,
 // bloomkeys.City the name) so a caller's spelling and case do not matter.
 // Built once on first use and sorted then, rather than on every call, since
 // the table it inverts is itself fixed for the life of the process.

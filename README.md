@@ -181,12 +181,14 @@ the compiled filters and the test fixtures are both committed.
   all the failures are reported together. A file the Census Bureau does not
   publish never reaches that list, so it is not a failure.
 - **`zip-city-names.tsv` is embedded too.** It is the ZIP Code to city name
-  relation the zip-city filter is built from, in a form that can be read out
-  rather than only asked: one line per ZIP Code and state, then the names seen
-  in that state, spelled the way the filter keys them. `CitiesKnownFor(zip)`
-  reads it back, so a caller holding a ZIP Code and no city has a starting
-  point — a list of names we have seen, not the cities in it. It costs about
-  1.2 MB next to 22 MB of filters. See poetic-systems/zipcity#17.
+  relation, in a form that can be read out rather than only asked: one line
+  per ZIP Code and state, then the names seen in that state, spelled the way
+  `CheckZipAndCity` and `CitiesKnownFor(zip)` both key them.
+  `CheckZipAndCity` answers exactly off this table — there is no zip-city
+  filter to ask instead — and `CitiesKnownFor(zip)` reads it back for a
+  caller holding a ZIP Code and no city: a starting point, a list of names
+  we have seen, not the cities in it. It costs about 1.2 MB next to the
+  street filters. See poetic-systems/zipcity#17, #55.
 
 ### The test fixtures
 

@@ -267,9 +267,6 @@ func TestFalsePositiveRate(t *testing.T) {
 	if zipcity.ZipStreetFalsePositiveRate != 0.005 {
 		t.Fatalf("ZipStreetFalsePositiveRate = %v, want 0.005", zipcity.ZipStreetFalsePositiveRate)
 	}
-	if zipcity.ZipCityFalsePositiveRate != 0.005 {
-		t.Fatalf("ZipCityFalsePositiveRate = %v, want 0.005", zipcity.ZipCityFalsePositiveRate)
-	}
 	if zipcity.CityStreetFalsePositiveRate != 0.005 {
 		t.Fatalf("CityStreetFalsePositiveRate = %v, want 0.005", zipcity.CityStreetFalsePositiveRate)
 	}
@@ -316,21 +313,18 @@ func TestCitiesKnownFor(t *testing.T) {
 	}
 }
 
-// Every name read out for a code is one the zip-city filter was built from,
-// so the two cannot disagree about what we have seen.
-func TestCitiesKnownForAgreeWithCheckZipAndCity(t *testing.T) {
-	for _, td := range testData {
-		n := 0
-		for _, city := range zipcity.CitiesKnownFor(td.Zip) {
-			n++
-			found, err := zipcity.CheckZipAndCity(td.Zip, city)
-			if err != nil || !found {
-				t.Errorf("CitiesKnownFor(%q) yielded %q, CheckZipAndCity = %v, %v", td.Zip, city, found, err)
-			}
-		}
-		if n == 0 {
-			t.Errorf("CitiesKnownFor(%q) yielded nothing, %q is in the filter", td.Zip, td.City)
-		}
+// CheckZipAndCity is now an exact slices.Contains over the same table
+// CitiesKnownFor reads, so a name that is not in the table for a ZIP Code
+// is false, not merely unlikely: there is no false positive rate left to
+// allow for. Under the old filter this pair would have come back false
+// 99.5% of the time; now it is always false.
+func TestCheckZipAndCityExact(t *testing.T) {
+	found, err := zipcity.CheckZipAndCity("84088", "Nowhereville")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Fatalf("Expected zip: '84088' and city: 'Nowhereville' not to be found")
 	}
 }
 
