@@ -30,19 +30,17 @@ import (
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
-// zipStreetFalsePositiveRate, zipCityFalsePositiveRate, and
-// cityStreetFalsePositiveRate are the false positive rates the zip-street,
-// zip-city, and city-street filters are each built with. They are written
-// into the generated compiled_filter package beside the filters (as
-// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
-// CityStreetFalsePositiveRate) so a caller weighing a Match can read the
-// rate a filter was actually generated with instead of a copy that can
-// drift. They are separate constants, rather than one shared by every
-// filter, so that one filter type's rate can move without an API change to
-// the rest — see poetic-systems/zipcity#53.
+// zipStreetFalsePositiveRate and cityStreetFalsePositiveRate are the false
+// positive rates the zip-street and city-street filters are each built
+// with. They are written into the generated compiled_filter package beside
+// the filters (as ZipStreetFalsePositiveRate and CityStreetFalsePositiveRate)
+// so a caller weighing a Match can read the rate a filter was actually
+// generated with instead of a copy that can drift. They are separate
+// constants, rather than one shared by every filter, so that one filter
+// type's rate can move without an API change to the rest — see
+// poetic-systems/zipcity#53.
 const (
 	zipStreetFalsePositiveRate  = 0.005
-	zipCityFalsePositiveRate    = 0.005
 	cityStreetFalsePositiveRate = 0.005
 )
 
@@ -72,14 +70,16 @@ func main() {
 	// that start with directionals, those that are numeric or
 	// alphabetic and might need to be spelled out or not, etc.
 
-	// NOTE: we are writing the zip-city and city-street maps directly to
-	// binary files that are about 6MB and loaded via go:embed. We break
-	// the zip-street relation up in to 100 different binary files to keep
-	// them small and isolate changes. These are also loaded via go:embed.
-	// The previous strategy of writing the bytes directly into the
-	// generated template file used ~16 bits per bit of data, resulting
-	// in a 100MB generated source file. The cumulative size of the
-	// compiled filter directory is now about 26 MB.
+	// NOTE: we are writing the city-street map directly to binary files
+	// that are about 6MB and loaded via go:embed. We break the zip-street
+	// relation up in to 100 different binary files to keep them small and
+	// isolate changes. These are also loaded via go:embed. The zip-city
+	// relation is instead written as zip-city-names.tsv and read back
+	// exactly, rather than built into a filter of its own — see
+	// poetic-systems/zipcity#55. The previous strategy of writing the bytes
+	// directly into the generated template file used ~16 bits per bit of
+	// data, resulting in a 100MB generated source file. The cumulative size
+	// of the compiled filter directory is now about 26 MB.
 
 	now := time.Now()
 	cwd, err := os.Getwd()
@@ -339,13 +339,12 @@ func main() {
 		}
 	}
 
-	// The same relation the zip-city filter is built from, written out so a
-	// caller holding a ZIP Code and no city has something to read rather than
-	// only something to ask. Written before the filter is built, off
-	// zipCityData itself, so the table and the filter cannot disagree about
-	// what we have seen. The state is the one the source placed the name
-	// in: GeoNames' admin code for its rows, the county's state for TIGER's.
-	// See poetic-systems/zipcity#17.
+	// The ZIP Code to city name relation, off zipCityData itself, written
+	// out so a caller holding a ZIP Code and no city has something to read.
+	// CheckZipAndCity reads it back too, for an exact answer over the same
+	// data — see poetic-systems/zipcity#55. The state is the one the source
+	// placed the name in: GeoNames' admin code for its rows, the county's
+	// state for TIGER's. See poetic-systems/zipcity#17.
 	names := make(zipcities.Table, len(zipCityData))
 	for _, pair := range zipCityData {
 		names.Add(pair.Zip, pair.State, pair.City)
@@ -353,27 +352,6 @@ func main() {
 	err = writeZipCityNames(
 		path.Join(cwd, "generated", "compiled_filter", "zip-city-names.tsv"),
 		names,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	// Add ~1/8 of overhead to the count for the base capacity
-	nZC := numZip2City + (numZip2City >> 3)
-	cityFilter := bloom.NewWithEstimates(nZC, zipCityFalsePositiveRate)
-
-	for key := range zipCityData {
-		cityFilter.Add([]byte(key))
-	}
-
-	// Serialize the Zip to City Bloom Filter
-
-	err = serialize(
-		path.Join(
-			filterDir,
-			bloomfilename.Filename("zip-city"),
-		),
-		cityFilter,
 	)
 	if err != nil {
 		panic(err)
@@ -429,15 +407,14 @@ import (
 
 var zip5pattern = regexp.MustCompile({{ tick }}^\d{5}${{ tick }})
 
-// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
-// CityStreetFalsePositiveRate are the false positive rates the zip-street,
-// zip-city, and city-street filters in this package were each built with
-// (bloom.NewWithEstimates in internal/bloomgenerator/bloomgenerator.go).
-// They are generated here, beside the filters, so none of them can drift
-// from what its filter was actually built with.
+// ZipStreetFalsePositiveRate and CityStreetFalsePositiveRate are the false
+// positive rates the zip-street and city-street filters in this package
+// were each built with (bloom.NewWithEstimates in
+// internal/bloomgenerator/bloomgenerator.go). They are generated here,
+// beside the filters, so neither can drift from what its filter was
+// actually built with.
 const (
 	ZipStreetFalsePositiveRate  = {{ .ZipStreetFalsePositiveRate }}
-	ZipCityFalsePositiveRate    = {{ .ZipCityFalsePositiveRate }}
 	CityStreetFalsePositiveRate = {{ .CityStreetFalsePositiveRate }}
 )
 
@@ -486,11 +463,11 @@ var bloom_filters = maps.Collect(func(yield func(CompiledFilter, *bloom.BloomFil
 //go:embed zip-city-names.tsv
 var zipCityNames []byte
 
-// ZipCityNames is the ZIP Code to city name table the zip-city filter was
-// built from, decoded on first use so a caller who only asks the filters
-// pays for the bytes and nothing more. The file is written by the same
-// generation that reads it back, so failing to read it is a build defect,
-// and fails the way an unreadable filter does.
+// ZipCityNames is the ZIP Code to city name table CheckZipAndCity and
+// CitiesKnownFor both read exactly, decoded on first use so a caller who
+// only asks the street filters pays for the bytes and nothing more. The
+// file is written by the same generation that reads it back, so failing to
+// read it is a build defect, and fails the way an unreadable filter does.
 var ZipCityNames = sync.OnceValue(func() zipcities.Table {
 	t, err := zipcities.Decode(bytes.NewReader(zipCityNames))
 	if err != nil {
@@ -546,7 +523,6 @@ type CompiledFilter string
 
 const (
 	Unrecognized CompiledFilter = ""
-	ZipCity      CompiledFilter = "zip-city"
 {{- range $varName, $csidentifier := .CSFiles }}
 	{{ $varName }}   CompiledFilter = "{{- $csidentifier -}}"
 {{- end }}
@@ -556,7 +532,6 @@ const (
 )
 
 var allCompiledFilters = map[string]CompiledFilter{
-	"zip-city":       ZipCity,
 {{- range $varName, $csidentifier := .CSFiles }}
 	"{{- $csidentifier -}}": {{ $varName }},
 {{- end }}
@@ -584,7 +559,6 @@ var allCompiledFilters = map[string]CompiledFilter{
 		"Absent":                      absentRows(absent),
 		"Now":                         now.UTC().Format(time.RFC3339),
 		"ZipStreetFalsePositiveRate":  zipStreetFalsePositiveRate,
-		"ZipCityFalsePositiveRate":    zipCityFalsePositiveRate,
 		"CityStreetFalsePositiveRate": cityStreetFalsePositiveRate,
 	})
 	if err != nil {
@@ -623,8 +597,8 @@ func absentRows(absent ustigerline.AbsentSources) []struct {
 
 // writeZipCityNames writes the ZIP Code to city name table beside the
 // compiled filters, where it is committed as the readable form of the
-// relation the zip-city filter answers questions about, and embedded so
-// CitiesKnownFor can read it back.
+// zip-city relation, and embedded so CitiesKnownFor and CheckZipAndCity can
+// both read it back.
 func writeZipCityNames(filename string, names zipcities.Table) error {
 	err := os.MkdirAll(path.Dir(filename), 0755)
 	if err != nil {

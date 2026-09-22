@@ -1,10 +1,11 @@
 // Package zipcities holds the ZIP Code to city name relation as a table, in
 // the form it is written to and read back from a generated file.
 //
-// The bloom filters can only refuse. ZipCityExists("20170", "HERNDON") answers
-// a question the caller already had a candidate for; a caller holding a ZIP
-// Code and no city has nothing to ask. This is the same relation the zip-city
-// filter is built from, kept in a form that can be read out.
+// The other bloom filters can only refuse. CheckZipAndCity("20170", "HERNDON")
+// answers a question the caller already had a candidate for; a caller
+// holding a ZIP Code and no city has nothing to ask. This table is what
+// CheckZipAndCity itself reads for an exact answer, kept in a form that can
+// also be read out directly.
 //
 // What it holds is names we have seen for a ZIP Code — GeoNames postal cities
 // and the TIGER place names taken off the face beside a side — not the cities
@@ -33,15 +34,15 @@ import (
 // holding a ZIP Code reads out cities and the state each is in together.
 type Table map[string]map[string][]string
 
-// Add records a name for a ZIP Code in a state, spelled the way the zip-city
-// filter keys it (bloomkeys.City): uppercase, diacritics folded per Project
-// US@ Appendix A, punctuation dropped and ST/MT/FT spelled out per
+// Add records a name for a ZIP Code in a state, spelled the way
+// CheckZipAndCity keys it (bloomkeys.City): uppercase, diacritics folded per
+// Project US@ Appendix A, punctuation dropped and ST/MT/FT spelled out per
 // Publication 28. The table is normalized rather than kept as the sources
 // spell it so that a name read out of it is the name a Project US@ address
 // carries, and so the same city is not listed twice because two sources
 // wrote it differently. CAÑO MARTIN PEÑA is here as CANO MARTIN PENA and
-// ST. ALBANS as SAINT ALBANS, the renderings the filter already answers to.
-// See poetic-systems/zipcity#24.
+// ST. ALBANS as SAINT ALBANS, the renderings CheckZipAndCity already answers
+// to. See poetic-systems/zipcity#24.
 func (t Table) Add(zip, state, city string) {
 	zip, state, city = bloomkeys.Normalize(zip), bloomkeys.Normalize(state), bloomkeys.City(city)
 	if zip == "" || city == "" {

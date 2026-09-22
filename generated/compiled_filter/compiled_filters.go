@@ -1,4 +1,4 @@
-// DO NOT EDIT! Code generated at 2026-09-17T03:42:25Z by internal/bloomgenerator/bloomgenerator.go
+// DO NOT EDIT! Code generated at 2026-09-22T13:10:15Z by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
 import (
@@ -18,15 +18,14 @@ import (
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
-// ZipStreetFalsePositiveRate, ZipCityFalsePositiveRate, and
-// CityStreetFalsePositiveRate are the false positive rates the zip-street,
-// zip-city, and city-street filters in this package were each built with
-// (bloom.NewWithEstimates in internal/bloomgenerator/bloomgenerator.go).
-// They are generated here, beside the filters, so none of them can drift
-// from what its filter was actually built with.
+// ZipStreetFalsePositiveRate and CityStreetFalsePositiveRate are the false
+// positive rates the zip-street and city-street filters in this package
+// were each built with (bloom.NewWithEstimates in
+// internal/bloomgenerator/bloomgenerator.go). They are generated here,
+// beside the filters, so neither can drift from what its filter was
+// actually built with.
 const (
 	ZipStreetFalsePositiveRate  = 0.005
-	ZipCityFalsePositiveRate    = 0.005
 	CityStreetFalsePositiveRate = 0.005
 )
 
@@ -80,11 +79,11 @@ var bloom_filters = maps.Collect(func(yield func(CompiledFilter, *bloom.BloomFil
 //go:embed zip-city-names.tsv
 var zipCityNames []byte
 
-// ZipCityNames is the ZIP Code to city name table the zip-city filter was
-// built from, decoded on first use so a caller who only asks the filters
-// pays for the bytes and nothing more. The file is written by the same
-// generation that reads it back, so failing to read it is a build defect,
-// and fails the way an unreadable filter does.
+// ZipCityNames is the ZIP Code to city name table CheckZipAndCity and
+// CitiesKnownFor both read exactly, decoded on first use so a caller who
+// only asks the street filters pays for the bytes and nothing more. The
+// file is written by the same generation that reads it back, so failing to
+// read it is a build defect, and fails the way an unreadable filter does.
 var ZipCityNames = sync.OnceValue(func() zipcities.Table {
 	t, err := zipcities.Decode(bytes.NewReader(zipCityNames))
 	if err != nil {
@@ -140,7 +139,6 @@ type CompiledFilter string
 
 const (
 	Unrecognized CompiledFilter = ""
-	ZipCity      CompiledFilter = "zip-city"
 	CityStreetAK CompiledFilter = "city-street-AK"
 	CityStreetAL CompiledFilter = "city-street-AL"
 	CityStreetAR CompiledFilter = "city-street-AR"
@@ -300,7 +298,6 @@ const (
 )
 
 var allCompiledFilters = map[string]CompiledFilter{
-	"zip-city":       ZipCity,
 	"city-street-AK": CityStreetAK,
 	"city-street-AL": CityStreetAL,
 	"city-street-AR": CityStreetAR,
