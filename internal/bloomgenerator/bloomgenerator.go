@@ -70,16 +70,16 @@ func main() {
 	// that start with directionals, those that are numeric or
 	// alphabetic and might need to be spelled out or not, etc.
 
-	// NOTE: we are writing the city-street map directly to binary files
-	// that are about 6MB and loaded via go:embed. We break the zip-street
-	// relation up in to 100 different binary files to keep them small and
-	// isolate changes. These are also loaded via go:embed. The zip-city
-	// relation is instead written as zip-city-names.tsv and read back
-	// exactly, rather than built into a filter of its own — see
-	// poetic-systems/zipcity#55. The previous strategy of writing the bytes
-	// directly into the generated template file used ~16 bits per bit of
-	// data, resulting in a 100MB generated source file. The cumulative size
-	// of the compiled filter directory is now about 26 MB.
+	// NOTE: we are writing the city-street map directly to binary files,
+	// bucketed by state or territory into about 56 files totaling about
+	// 12MB, and loaded via go:embed. We break the zip-street relation up
+	// into 100 different binary files, totaling about 11MB, to keep them
+	// small and isolate changes — a regeneration only touches the buckets
+	// whose data actually changed. These are also loaded via go:embed. The
+	// zip-city relation is instead written as zip-city-names.tsv (about
+	// 1.2MB) and read back exactly, rather than built into a filter of its
+	// own — see poetic-systems/zipcity#55. The cumulative size of the
+	// compiled filter directory is now about 23MB.
 
 	now := time.Now()
 	cwd, err := os.Getwd()
