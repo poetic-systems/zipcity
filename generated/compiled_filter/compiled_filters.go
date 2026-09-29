@@ -1,4 +1,4 @@
-// DO NOT EDIT! Code generated at 2026-09-22T13:10:15Z by internal/bloomgenerator/bloomgenerator.go
+// DO NOT EDIT! Code generated at 2026-09-29T19:01:06Z by internal/bloomgenerator/bloomgenerator.go
 package compiled_filter
 
 import (
@@ -25,8 +25,8 @@ var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 // beside the filters, so neither can drift from what its filter was
 // actually built with.
 const (
-	ZipStreetFalsePositiveRate  = 0.005
-	CityStreetFalsePositiveRate = 0.005
+	ZipStreetFalsePositiveRate  = 0.001
+	CityStreetFalsePositiveRate = 0.001
 )
 
 // AbsentSources names, per TIGER area code, the source file types the Census
