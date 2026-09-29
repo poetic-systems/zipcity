@@ -40,8 +40,8 @@ import (
 // type's rate can move without an API change to the rest — see
 // poetic-systems/zipcity#53.
 const (
-	zipStreetFalsePositiveRate  = 0.005
-	cityStreetFalsePositiveRate = 0.005
+	zipStreetFalsePositiveRate  = 0.001
+	cityStreetFalsePositiveRate = 0.001
 )
 
 type ZipStreetTuple struct {
@@ -314,9 +314,7 @@ func main() {
 	zipstreetfiles := make(map[string]string, 0)
 	for zipscope, streets := range zipStreetData {
 		numThisZip2Street := uint(len(streets))
-		// Add ~1/8 of overhead to the count for the base capacity
-		nZS := numThisZip2Street + (numThisZip2Street >> 3)
-		streetFilter := bloom.NewWithEstimates(nZS, zipStreetFalsePositiveRate)
+		streetFilter := bloom.NewWithEstimates(numThisZip2Street, zipStreetFalsePositiveRate)
 
 		for key := range streets {
 			streetFilter.Add([]byte(key))
@@ -361,9 +359,7 @@ func main() {
 
 	for uspsstate, stateCityStreetData := range cityStreetData {
 		numThisCity2Street := uint(len(stateCityStreetData))
-		// Add ~1/8 of overhead to the count for the base capacity
-		nCS := numThisCity2Street + (numThisCity2Street >> 3)
-		cityStreetFilter := bloom.NewWithEstimates(nCS, cityStreetFalsePositiveRate)
+		cityStreetFilter := bloom.NewWithEstimates(numThisCity2Street, cityStreetFalsePositiveRate)
 
 		for key := range stateCityStreetData {
 			cityStreetFilter.Add([]byte(key))
