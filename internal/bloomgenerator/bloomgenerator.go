@@ -19,7 +19,6 @@ import (
 	"slices"
 	"strings"
 	"text/template"
-	"time"
 
 	bloom "github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/zipcity/internal/areazip"
@@ -27,6 +26,7 @@ import (
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
+	"github.com/poetic-systems/zipcity/internal/usziplocale"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
@@ -81,7 +81,6 @@ func main() {
 	// own — see poetic-systems/zipcity#55. The cumulative size of the
 	// compiled filter directory is now about 23MB.
 
-	now := time.Now()
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -134,6 +133,27 @@ func main() {
 		panic(err)
 	}
 
+	// The Postal Service's own ZIP Locale Detail table names the unit that
+	// delivers each ZIP Code. That is not the same claim as GeoNames' postal
+	// city or TIGER's place, so it goes into the ZIP Code to city relation
+	// under its own source rather than mixed in with them, and it does not go
+	// into the street filters at all: nothing here saw a street beside it.
+	// Military mail is the one place the table is the better source outright,
+	// naming 571 codes individually where GeoNames has far fewer and never
+	// writes DPO. See poetic-systems/zipcity#48.
+	zldpath, err := usziplocale.Download()
+	if err != nil {
+		panic(err)
+	}
+	militaryzips, err := usziplocale.MilitaryZips(zldpath)
+	if err != nil {
+		panic(err)
+	}
+	postoffices, err := usziplocale.PostOfficesByZip(zldpath)
+	if err != nil {
+		panic(err)
+	}
+
 	// Every ZIP Code GeoNames knows contributes its city directly. TIGER can
 	// only offer a pair where it has both a place and an address range, so
 	// this is the whole of the zip-city relation and TIGER adds to it rather
@@ -157,6 +177,11 @@ func main() {
 	numZip2Sreet := uint(0)
 	numCity2Street := uint(0)
 	numStreetOnly := uint(0)
+	// additivezips are the ZIP Codes that gain a city-street key from the
+	// additive postal city rule below — the ones the either/or reading used to
+	// lose. Counted rather than asserted because the change is only worth what
+	// it actually reaches. See poetic-systems/zipcity#59.
+	additivezips := map[string]struct{}{}
 	// Reading a county is most of a generation and each one is independent,
 	// so they are read several at a time and merged here in order. Half the
 	// CPUs is a working guess: the largest county (Los Angeles) reads in
@@ -195,20 +220,34 @@ func main() {
 			if side.City != nil {
 				cty = side.City.Name
 			}
-			// A side outside any incorporated place still has a city on an
-			// envelope: the post office that delivers its ZIP Code. Those
-			// cities are the ones the city-street relation is missing, so a
-			// side with no place of its own borrows every city GeoNames
-			// names for its ZIP Codes. It borrows all of them rather than
-			// one, because nothing here can tell which post office serves
-			// which end of the street.
+			// A side inside an incorporated place still has a second city on
+			// an envelope: the post office that delivers its ZIP Code, which
+			// is often not the place it sits in. So the names are additive —
+			// the place TIGER gives the side, and every postal city GeoNames
+			// names for the side's ZIP Codes — rather than the place where
+			// there is one and the postal cities only otherwise.
+			//
+			// Both are names a caller legitimately writes on that street, and
+			// taking only the place lost the postal city for every side in a
+			// place whose delivering office has a different name: an address
+			// in DanDan, Saipan is delivered from SAIPAN MP, and the
+			// city-street key SAIPAN|MP|CHALAN TUN HERMAN PAN was missing
+			// because TIGER had a place name to offer. All of them are taken
+			// rather than one, because nothing here can tell which post
+			// office serves which end of the street. Duplicates are left to
+			// the key map. See poetic-systems/zipcity#59.
 			postalcities := []string{}
 			if len(cty) > 0 {
 				postalcities = append(postalcities, cty)
-			} else {
-				for _, zip := range zips {
-					for _, place := range placesByZip[zip] {
-						postalcities = append(postalcities, place.PlaceName)
+			}
+			for _, zip := range zips {
+				for _, place := range placesByZip[zip] {
+					postalcities = append(postalcities, place.PlaceName)
+					// The ZIP Codes where the additive rule is the whole
+					// difference: TIGER had a place, so the postal city used
+					// to be dropped, and it is a different name.
+					if len(cty) > 0 && bloomkeys.City(place.PlaceName) != bloomkeys.City(cty) {
+						additivezips[zip] = struct{}{}
 					}
 				}
 			}
@@ -299,8 +338,8 @@ func main() {
 			}
 		}
 	}
-	log.Printf("Counts - zip-city: %d (%d from GeoNames) zip-street: %d city-street: %d street-only: %d",
-		numZip2City, numGeonamesZip2City, numZip2Sreet, numCity2Street, numStreetOnly)
+	log.Printf("Counts - zip-city: %d (%d from GeoNames) zip-street: %d city-street: %d street-only: %d additive-postal-city zips: %d",
+		numZip2City, numGeonamesZip2City, numZip2Sreet, numCity2Street, numStreetOnly, len(additivezips))
 
 	// Initialize Bloom Filters
 	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
@@ -345,8 +384,56 @@ func main() {
 	// state for TIGER's. See poetic-systems/zipcity#17.
 	names := make(zipcities.Table, len(zipCityData))
 	for _, pair := range zipCityData {
-		names.Add(pair.Zip, pair.State, pair.City)
+		names.Add(pair.Zip, pair.State, pair.City, zipcities.Seen)
 	}
+
+	// The Postal Service's delivery unit for each ZIP Code, under its own
+	// source so a caller can tell the recommendation from the sightings.
+	//
+	// A military code takes its state from the service area rather than from
+	// the row, because the row names the gateway that accepts the mail
+	// (JERSEY CITY NJ, MIAMI FL, SAN FRANCISCO CA) and an address to an
+	// overseas post office is written AA, AE or AP — the point of
+	// poetic-systems/zipcity#24. A code the service areas do not cover is
+	// reported rather than filed under no state at all. Everywhere else the
+	// row's own PHYSICAL STATE is the state the delivering office stands in,
+	// which is the state that name belongs to.
+	numMilitaryZip2City := 0
+	uspszips := map[string]struct{}{}
+	for _, zip := range slices.Sorted(maps.Keys(militaryzips)) {
+		unit := militaryzips[zip]
+		state := usgeonames.MilitaryState(zip)
+		if state == "" {
+			log.Printf("Warning: military ZIP Code %s (%s) is in no known service area", zip, unit.Name)
+			continue
+		}
+		names.Add(zip, state, unit.Name, zipcities.USPS)
+		uspszips[zip] = struct{}{}
+		numMilitaryZip2City += 1
+	}
+	numUspsZip2City := 0
+	differing := []string{}
+	for _, zip := range slices.Sorted(maps.Keys(postoffices)) {
+		if _, military := militaryzips[zip]; military {
+			continue
+		}
+		for _, office := range postoffices[zip] {
+			names.Add(zip, office.PhysicalState, office.Name, zipcities.USPS)
+			uspszips[zip] = struct{}{}
+			numUspsZip2City += 1
+			// PHYSICAL CITY is the town the office building stands in, which
+			// is not always what it is called: it is measured here and left
+			// out of the table until there is a reason to believe it is a
+			// last line somebody writes. See poetic-systems/zipcity#48.
+			if office.PhysicalCity != "" && bloomkeys.City(office.PhysicalCity) != bloomkeys.City(office.Name) {
+				differing = append(differing, fmt.Sprintf("%s %s/%s", zip, office.Name, office.PhysicalCity))
+			}
+		}
+	}
+	log.Printf("Counts - usps zip-city: %d names over %d ZIP Codes, %d of them military; PHYSICAL CITY differs from LOCALE NAME on %d rows, first 20: %s",
+		numUspsZip2City+numMilitaryZip2City, len(uspszips), numMilitaryZip2City,
+		len(differing), strings.Join(differing[:min(20, len(differing))], ", "))
+
 	err = writeZipCityNames(
 		path.Join(cwd, "generated", "compiled_filter", "zip-city-names.tsv"),
 		names,
@@ -383,7 +470,14 @@ func main() {
 	}
 
 	// Generate the Go source code containing the embedded asset
-	tmpl := `// DO NOT EDIT! Code generated at {{ .Now }} by internal/bloomgenerator/bloomgenerator.go
+	// The header carries no timestamp. Everything under generated/ is
+	// committed and reviewed as a diff, and a wall clock in the first line
+	// made every regeneration a change even when none of the data moved — so
+	// the one test that matters, regenerating and then asking the repository
+	// whether anything differs, could never pass. A content hash would be no
+	// better: it would live in the very file it is meant to describe. Same
+	// input, same bytes. See poetic-systems/zipcity#57.
+	tmpl := `// Code generated by internal/bloomgenerator/bloomgenerator.go. DO NOT EDIT.
 package compiled_filter
 
 import (
@@ -553,7 +647,6 @@ var allCompiledFilters = map[string]CompiledFilter{
 		"ZSFiles":                     zipstreetfiles,
 		"CSFiles":                     citystreetfiles,
 		"Absent":                      absentRows(absent),
-		"Now":                         now.UTC().Format(time.RFC3339),
 		"ZipStreetFalsePositiveRate":  zipStreetFalsePositiveRate,
 		"CityStreetFalsePositiveRate": cityStreetFalsePositiveRate,
 	})

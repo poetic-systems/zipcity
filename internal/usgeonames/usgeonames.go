@@ -234,15 +234,30 @@ func downloadPostalCodeZip(country string) (string, error) {
 // Armed Forces Americas, Europe and Pacific.
 var militaryStates = []string{"AA", "AE", "AP"}
 
-// militaryState is the state the Postal Service assigns to an overseas
-// military ZIP Code by its three-digit service area: 090-098 Armed Forces
+// MilitaryState is the state the Postal Service assigns to an overseas
+// military ZIP Code by its three-digit service area: 090-099 Armed Forces
 // Europe, 340 Armed Forces Americas, 962-966 Armed Forces Pacific. Any other
 // ZIP Code yields "".
 //
+// The FAQ below writes the European range as 090-098, but the Postal
+// Service's own ZIP Locale Detail table lists thirteen class-M codes in 099 —
+// 09902 an FPO, 09903 through 09905 APOs, 09974 through 09977 and 09980
+// through 09984 DPOs — every one of them accepted at the Jersey City gateway
+// the rest of 09xxx goes through. So the range is read as 090-099 here: a
+// code the Postal Service delivers as Armed Forces Europe mail with no state
+// at all is worse than one digit of range the FAQ does not spell out. See
+// poetic-systems/zipcity#48.
+//
+// It is exported because the ZIP Locale Detail table names the gateway that
+// accepts military mail (JERSEY CITY NJ, MIAMI FL, SAN FRANCISCO CA) and not
+// the AA/AE/AP an address is written with, so the generator reading that
+// table needs this same rule rather than a second copy of it. See
+// poetic-systems/zipcity#24.
+//
 // See https://faq.usps.com/s/article/How-Do-I-Address-Military-Mail.
-func militaryState(postalcode string) string {
+func MilitaryState(postalcode string) string {
 	switch area := postalcode[:min(3, len(postalcode))]; {
-	case "090" <= area && area <= "098":
+	case "090" <= area && area <= "099":
 		return "AE"
 	case area == "340":
 		return "AA"
@@ -271,7 +286,7 @@ func overseasMilitary(postalcode, placename, state string) (string, string) {
 	}
 
 	city, military, found := strings.Cut(placename, " ")
-	if usps := militaryState(postalcode); usps != "" {
+	if usps := MilitaryState(postalcode); usps != "" {
 		return city, usps
 	}
 	if !found || !slices.Contains(militaryStates, military) {
