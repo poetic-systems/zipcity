@@ -13,6 +13,7 @@ import (
 	"github.com/poetic-systems/addresstables/directionals"
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
@@ -160,8 +161,8 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	}
 
 	name := bloomkeys.City(city)
-	for _, cities := range compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)] {
-		if slices.Contains(cities, name) {
+	for _, names := range compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)] {
+		if slices.ContainsFunc(names, func(n zipcities.Name) bool { return n.City == name }) {
 			return true, nil
 		}
 	}
@@ -208,21 +209,53 @@ func MatchCityStateAndStreet(city, state, street string) (Match, error) {
 	return match(f, func(s string) string { return bloomkeys.KeyCityStateStreet(city, state, s) }, street), nil
 }
 
-// CitiesKnownFor yields the state and city names seen for a ZIP Code —
-// GeoNames postal cities and the TIGER place names beside its streets — each
-// under the state its source placed it in, states ascending and names
-// ascending within a state. It is the relation CheckZipAndCity is built
-// from, read out for a caller holding a ZIP Code and no city to ask about.
+// CitiesKnownFor yields the state and city names known for a ZIP Code —
+// GeoNames postal cities, the TIGER place names beside its streets, and the
+// Postal Service's own delivery unit for the code — each under the state its
+// source placed it in, states ascending and names ascending within a state. A
+// name more than one source offered is yielded once. It is the relation
+// CheckZipAndCity is built from, read out for a caller holding a ZIP Code and
+// no city to ask about.
 //
 // It is a starting point, not an answer: the list is neither complete nor
 // preferred-first, and a name's absence from it is not evidence against that
-// name. A code nothing was seen for yields nothing. See
-// poetic-systems/zipcity#17.
+// name. A code nothing was seen for yields nothing. A caller who needs to
+// weigh the names rather than just enumerate them wants
+// CitiesRecommendedFor. See poetic-systems/zipcity#17.
 func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
-		states := compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)]
-		for _, state := range slices.Sorted(maps.Keys(states)) {
-			for _, city := range states[state] {
+		zip = bloomkeys.Normalize(zip)
+		table := compiled_filter.ZipCityNames()
+		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
+			for _, city := range table.Names(zip, state) {
+				if !yield(state, city) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// CitiesRecommendedFor yields the state and city names the Postal Service's
+// ZIP Locale Detail table gives for a ZIP Code: the delivery units that carry
+// its mail, states ascending and names ascending within a state.
+//
+// These are a subset of what CitiesKnownFor yields, marked out because they
+// are not the same kind of claim. A GeoNames postal city or a TIGER place is a
+// name somebody associated with the code; this is the name the Postal Service
+// itself puts on it, which is the one most likely to appear on an envelope.
+// It is still not a guarantee — a code is often delivered from an office in
+// the next town, so the recommended name is not always the name the addressee
+// writes — but a caller choosing between several names should know which one
+// came from here. Most codes yield one name, a few yield several where more
+// than one office delivers into them, and one yields none where only stations
+// and branches do. See poetic-systems/zipcity#48.
+func CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		zip = bloomkeys.Normalize(zip)
+		table := compiled_filter.ZipCityNames()
+		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
+			for _, city := range table.NamesFrom(zip, state, zipcities.USPS) {
 				if !yield(state, city) {
 					return
 				}
@@ -240,15 +273,19 @@ func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 var zipsByStateCity = sync.OnceValue(func() map[string][]string {
 	inverted := map[string][]string{}
 	for zip, states := range compiled_filter.ZipCityNames() {
-		for state, cities := range states {
-			for _, city := range cities {
-				key := state + ":" + city
+		for state, names := range states {
+			for _, name := range names {
+				key := state + ":" + name.City
 				inverted[key] = append(inverted[key], zip)
 			}
 		}
 	}
+	// A name both sources offered lands here once per source, so the codes are
+	// compacted as well as sorted: which sources named a code is not a fact
+	// about the list of codes.
 	for key := range inverted {
 		slices.Sort(inverted[key])
+		inverted[key] = slices.Compact(inverted[key])
 	}
 	return inverted
 })

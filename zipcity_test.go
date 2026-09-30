@@ -107,15 +107,22 @@ var testData = []struct {
 	},
 	{
 		Street: "Chalan Tun Herman Pan",
-		// TODO: Addresses and roads in the Northern Mariana Islands might deserve a
-		// closer look. In particular, if someone puts "Saipan" as the city it
-		// is not going to work - but the
-		// [USPS Zip Locale Detail.xls](https://postalpro.usps.com/ZIP_Locale_Detail)
-		// shows the "Physical City" field for 96950 as "Saipan" (though the "Locale"
-		// lists a few different names.)
-		City:  "DanDan",
-		State: "MP",
-		Zip:   "96950",
+		City:   "DanDan",
+		State:  "MP",
+		Zip:    "96950",
+	},
+	// The same street under the name the post office delivers it as. TIGER
+	// puts this side in the village of DanDan, and while the city-street
+	// relation only took the TIGER place when there was one, SAIPAN — the
+	// postal city GeoNames names for 96950 — was dropped for every street in
+	// an incorporated place on the island. The postal city and the place are
+	// both names a caller writes, so the generator now keys both. See
+	// poetic-systems/zipcity#59.
+	{
+		Street: "Chalan Tun Herman Pan",
+		City:   "Saipan",
+		State:  "MP",
+		Zip:    "96950",
 	},
 }
 
