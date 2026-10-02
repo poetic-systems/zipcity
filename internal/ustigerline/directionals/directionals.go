@@ -99,18 +99,15 @@ func Abbreviate(full string, isSpanish bool) string {
 	return full
 }
 
+// Pub28 abbreviates src to its Publication 28 form without crossing
+// languages. USPS Pub 28 §295 and Project US@ p.25 both forbid translating a
+// Puerto Rico directional between Spanish and English (NO must stay NO, not
+// become NW), so a Spanish row's own Short is returned rather than its
+// English counterpart's.
 func Pub28(src string) string {
-	// in case it is Spanish, look it up first
 	d, ok := infoTable[src]
 	if ok {
-		if !d.Spanish {
-			return d.Short
-		}
-
-		d, ok = infoTable[d.English]
-		if ok {
-			return d.Short
-		}
+		return d.Short
 	}
 
 	// the unmatched case just returns src unchanged so we don't

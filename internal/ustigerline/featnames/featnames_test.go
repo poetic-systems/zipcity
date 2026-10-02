@@ -28,7 +28,9 @@ func TestPub28FeatureName(t *testing.T) {
 				"SUFTYP":     "",
 				"SUFTYPABRV": "",
 			},
-			Want: "W CALLE DE LA CRUZ",
+			// USPS Pub 28 §295 and Project US@ p.25 forbid translating a
+			// Puerto Rico directional to English: O (oeste) stays O, never W.
+			Want: "O CALLE DE LA CRUZ",
 		},
 		{
 			In: map[string]any{
