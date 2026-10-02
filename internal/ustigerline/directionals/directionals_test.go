@@ -68,3 +68,31 @@ func TestAbbreviate(t *testing.T) {
 		}
 	}
 }
+
+// Pub 28 forbids translating a Puerto Rico directional between Spanish and
+// English: NO (noroeste) must stay NO, never become NW.
+func TestPub28(t *testing.T) {
+	cases := []struct {
+		In   string
+		Want string
+	}{
+		{"NORTH", "N"},
+		{"SOUTHWEST", "SW"},
+		{"NORTE", "N"},
+		{"NOROESTE", "NO"},
+		{"OESTE", "O"},
+		{"SUDOESTE", "SO"},
+		{"O", "O"},
+		{"NO", "NO"},
+		{"SO", "SO"},
+		{"SW", "SW"},
+		{"Q", "Q"},
+	}
+
+	for _, tc := range cases {
+		got := directionals.Pub28(tc.In)
+		if got != tc.Want {
+			t.Errorf("Pub28('%s') wanted: '%s' got: '%s'", tc.In, tc.Want, got)
+		}
+	}
+}
