@@ -52,7 +52,7 @@ const landingURL = "https://postalpro.usps.com/ZIP_Locale_Detail"
 
 // workbookLink finds the workbook's href on the landing page. The page is
 // Drupal-rendered HTML and this is the only .xlsx on it.
-var workbookLink = regexp.MustCompile(`href="([^"]*ZIP_Locale_Detail\.xlsx)"`)
+var workbookLink = regexp.MustCompile(`(?i)href="([^"]*ZIP_Locale_Detail\.xlsx)"`)
 
 var storagedir = filepath.Join(strings.Split("./data/usps_zip_locale_detail/", "/")...)
 

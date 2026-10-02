@@ -1,7 +1,8 @@
 //go:build ignore
 // +build ignore
 
-// generator.go - Run via 'go run internal/bloomgenerator/bloomgenerator.go' to generate filters.go
+// bloomgenerator.go - Run via 'go run internal/bloomgenerator/bloomgenerator.go' to generate
+// compiled_filters.go and the related binary files it embeds.
 
 package main
 
