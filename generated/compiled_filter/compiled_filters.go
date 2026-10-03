@@ -25,8 +25,8 @@ var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 // beside the filters, so neither can drift from what its filter was
 // actually built with.
 const (
-	ZipStreetFalsePositiveRate  = 0.001
-	CityStreetFalsePositiveRate = 0.001
+	ZipStreetFalsePositiveRate  = 0.00075
+	CityStreetFalsePositiveRate = 0.00075
 )
 
 // AbsentSources names, per TIGER area code, the source file types the Census

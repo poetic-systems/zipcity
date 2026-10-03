@@ -271,11 +271,11 @@ func TestMatchStreet(t *testing.T) {
 // with, so a caller weighing a Match's Asked against one is weighing the
 // right number.
 func TestFalsePositiveRate(t *testing.T) {
-	if zipcity.ZipStreetFalsePositiveRate != 0.001 {
-		t.Fatalf("ZipStreetFalsePositiveRate = %v, want 0.001", zipcity.ZipStreetFalsePositiveRate)
+	if zipcity.ZipStreetFalsePositiveRate != 0.00075 {
+		t.Fatalf("ZipStreetFalsePositiveRate = %v, want 0.00075", zipcity.ZipStreetFalsePositiveRate)
 	}
-	if zipcity.CityStreetFalsePositiveRate != 0.001 {
-		t.Fatalf("CityStreetFalsePositiveRate = %v, want 0.001", zipcity.CityStreetFalsePositiveRate)
+	if zipcity.CityStreetFalsePositiveRate != 0.00075 {
+		t.Fatalf("CityStreetFalsePositiveRate = %v, want 0.00075", zipcity.CityStreetFalsePositiveRate)
 	}
 }
 
