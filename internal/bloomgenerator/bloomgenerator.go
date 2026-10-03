@@ -41,8 +41,8 @@ import (
 // type's rate can move without an API change to the rest — see
 // poetic-systems/zipcity#53.
 const (
-	zipStreetFalsePositiveRate  = 0.001
-	cityStreetFalsePositiveRate = 0.001
+	zipStreetFalsePositiveRate  = 0.00075
+	cityStreetFalsePositiveRate = 0.00075
 )
 
 type ZipStreetTuple struct {
@@ -267,14 +267,11 @@ func main() {
 					alts = string(altbytes)
 				}
 			}
-			// if (len(cty) > 0 && nonalpha.MatchString(cty)) ||
-			// 	(len(street) > 0 && nonalphanum.MatchString(street)) ||
-			// 	(len(side.Zip) > 0 && nonalphanum.MatchString(side.Zip)) {
-			// 	fmt.Printf("Non-alphabetical characters found in name associated with side. Zip: %s City: %s Street: %s\n", side.Zip, cty, street)
-			// }
-			if len(street) > 0 && (strings.Contains(street, "Ó ") ||
-				strings.Contains(alts, "Ó ")) {
-				// fmt.Printf("found Zip: %s City: %s Street: %s or: %s\n", side.Zip, cty, street, alts)
+			if len(street) > 0 && (strings.Contains(street, "BUSINESS LANE") ||
+				strings.Contains(alts, "BUSINESS LANE") ||
+				strings.Contains(street, "BUSINESS LN") ||
+				strings.Contains(alts, "BUSINESS LN")) {
+				// fmt.Printf("found Zip: %q City: %q Street: %q or: %q\n", side.Zips, cty, street, alts)
 			}
 			// Addresses at each end of a street may be served by different
 			// ZIP Codes, so a side carries every ZIP Code its address ranges
