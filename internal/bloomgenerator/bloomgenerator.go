@@ -8,7 +8,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"go/format"
 	"log"
@@ -254,7 +253,6 @@ func main() {
 			}
 			street := ""
 			streetnames := []string{}
-			alts := ""
 			if side.Street != nil {
 				street = side.Street.Name
 				// Only the Pub 28 renderings are keyed. Name is the edges
@@ -262,17 +260,8 @@ func main() {
 				// PACIFIC RR, CLL LOIZA), which no caller in spec form sends.
 				// See #1.
 				streetnames = side.Street.Alt
-				altbytes, err := json.Marshal(side.Street.Alt)
-				if err != nil {
-					alts = string(altbytes)
-				}
 			}
-			if len(street) > 0 && (strings.Contains(street, "BUSINESS LANE") ||
-				strings.Contains(alts, "BUSINESS LANE") ||
-				strings.Contains(street, "BUSINESS LN") ||
-				strings.Contains(alts, "BUSINESS LN")) {
-				// fmt.Printf("found Zip: %q City: %q Street: %q or: %q\n", side.Zips, cty, street, alts)
-			}
+
 			// Addresses at each end of a street may be served by different
 			// ZIP Codes, so a side carries every ZIP Code its address ranges
 			// name rather than one.
@@ -340,7 +329,7 @@ func main() {
 		numZip2City, numGeonamesZip2City, numZip2Sreet, numCity2Street, numStreetOnly, len(additivezips))
 
 	// Initialize Bloom Filters
-	// Estimates for US: ~30M unique combinations. FPR: 0.1% (0.001)
+	// Estimates for US: ~30M unique combinations. FPR: 0.075% (0.00075)
 	// With several address range files absent (mostly for islands):
 	//  Counts - zip-city: 4396668 zip-street: 20604757 city-street: 4396668
 
