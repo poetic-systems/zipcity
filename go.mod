@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bits-and-blooms/bloom/v3 v3.7.1
-	github.com/poetic-systems/addresstables v0.0.0-20260916210329-942fea7be238
+	github.com/poetic-systems/addresstables v0.1.0-alpha.0
 	github.com/twpayne/go-shapefile v0.0.7
 	golang.org/x/text v0.33.0
 )
