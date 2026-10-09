@@ -1,11 +1,28 @@
 package zipcity_test
 
 import (
+	"fmt"
+	"io/fs"
+	"os"
+	"path"
 	"slices"
 	"testing"
 
 	"github.com/poetic-systems/zipcity"
 )
+
+func init() {
+	zipcity.RegisterFS(func() (fs.FS, error) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		datadir := path.Join(cwd, "generated/embedded_filter")
+		fmt.Printf("Standard filesystem Data dir: %q\n", datadir)
+		dirfs := os.DirFS(datadir)
+		return dirfs, nil
+	})
+}
 
 var testData = []struct {
 	Street string

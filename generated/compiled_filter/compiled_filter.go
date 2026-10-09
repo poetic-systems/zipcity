@@ -2,19 +2,14 @@
 package compiled_filter
 
 import (
-	"bytes"
-	"embed"
 	"fmt"
+	"iter"
 	"maps"
-	"path"
 	"regexp"
 	"strings"
-	"sync"
-
-	bloom "github.com/bits-and-blooms/bloom/v3"
-	"github.com/poetic-systems/zipcity/internal/bloomfilename"
-	"github.com/poetic-systems/zipcity/internal/zipcities"
 )
+
+const DataFilesSHA256 = "98b19aff09ceca376c05940fd22634aa9b8b165804a8eaf8853537dc7ec74e2e"
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
@@ -48,50 +43,6 @@ var AbsentSources = map[string][]string{
 	"69120": {"addr"},
 }
 
-//go:embed bloom_filters/*.bin
-var bloomDir embed.FS
-
-// Keep a map of the raw, zero-allocation byte arrays
-var bloom_filters = maps.Collect(func(yield func(CompiledFilter, *bloom.BloomFilter) bool) {
-	for key, name := range allCompiledFilters {
-
-		keypath := path.Join("bloom_filters", bloomfilename.Filename(key))
-
-		// ReadFile allocates each byte slice once during boot
-		data, err := bloomDir.ReadFile(keypath)
-		if err != nil {
-			panic(err)
-		}
-
-		filter := &bloom.BloomFilter{}
-		reader := bytes.NewReader(data)
-		_, err = filter.ReadFrom(reader)
-		if err != nil {
-			panic(fmt.Errorf("Failed to read %s bloom filter: %w", name, err))
-		}
-
-		if !yield(name, filter) {
-			return
-		}
-	}
-})
-
-//go:embed zip-city-names.tsv
-var zipCityNames []byte
-
-// ZipCityNames is the ZIP Code to city name table CheckZipAndCity and
-// CitiesKnownFor both read exactly, decoded on first use so a caller who
-// only asks the street filters pays for the bytes and nothing more. The
-// file is written by the same generation that reads it back, so failing to
-// read it is a build defect, and fails the way an unreadable filter does.
-var ZipCityNames = sync.OnceValue(func() zipcities.Table {
-	t, err := zipcities.Decode(bytes.NewReader(zipCityNames))
-	if err != nil {
-		panic(fmt.Errorf("Failed to read zip-city names: %w", err))
-	}
-	return t
-})
-
 func toCompiledFilter(in string) (CompiledFilter, error) {
 	cf, ok := allCompiledFilters[in]
 	if ok {
@@ -124,15 +75,6 @@ func ZipStreetFilterForZip(zip string) (CompiledFilter, error) {
 		return Unrecognized, fmt.Errorf("known 5-digit zip code required")
 	}
 	return cf, nil
-}
-
-// LoadFilter restores the compiled filter in memory
-func LoadFilter(name CompiledFilter) (*bloom.BloomFilter, error) {
-	filter, ok := bloom_filters[name]
-	if !ok {
-		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
-	}
-	return filter, nil
 }
 
 type CompiledFilter string
@@ -454,4 +396,8 @@ var allCompiledFilters = map[string]CompiledFilter{
 	"zip-street-97":  ZipStreet97,
 	"zip-street-98":  ZipStreet98,
 	"zip-street-99":  ZipStreet99,
+}
+
+func All() iter.Seq[CompiledFilter] {
+	return maps.Values(allCompiledFilters)
 }

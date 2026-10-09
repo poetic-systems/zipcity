@@ -12,9 +12,36 @@ import (
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/poetic-systems/addresstables/directionals"
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
+	"github.com/poetic-systems/zipcity/internal/bloomdata"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
+	"github.com/poetic-systems/zipcity/pkg/filterfs"
+	"github.com/poetic-systems/zipcity/pkg/filterfs/gitcache"
 )
+
+var zipcityFS filterfs.InitFunc
+
+var filters = sync.OnceValue(func() *bloomdata.BloomData {
+	fmt.Println("Initializing zipcity filesystem")
+	if zipcityFS == nil {
+		// panic(fmt.Errorf("you must register a zipcity filterfs.InitFunc"))
+		RegisterFS(gitcache.PrepareFS)
+	}
+	files, err := zipcityFS.PrepareFS()
+	if err != nil {
+		panic(err)
+	}
+	b, err := bloomdata.New(files)
+	if err != nil {
+		panic(err)
+	}
+
+	return b
+})
+
+func RegisterFS(ffs filterfs.InitFn) {
+	zipcityFS = ffs
+}
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
@@ -114,7 +141,7 @@ func zipStreetFilter(zip, street string) (*bloom.BloomFilter, error) {
 		return nil, fmt.Errorf("Unable to identify bloom filter for zip: %w", err)
 	}
 
-	f, err := compiled_filter.LoadFilter(filterId)
+	f, err := filters().LoadFilter(filterId)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
@@ -139,7 +166,7 @@ func cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
 		return nil, fmt.Errorf("Unable to identify bloom filter for state: %w", err)
 	}
 
-	f, err := compiled_filter.LoadFilter(filterId)
+	f, err := filters().LoadFilter(filterId)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
@@ -161,7 +188,7 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	}
 
 	name := bloomkeys.City(city)
-	for _, names := range compiled_filter.ZipCityNames()[bloomkeys.Normalize(zip)] {
+	for _, names := range filters().ZipCityNames()[bloomkeys.Normalize(zip)] {
 		if slices.ContainsFunc(names, func(n zipcities.Name) bool { return n.City == name }) {
 			return true, nil
 		}
@@ -225,7 +252,7 @@ func MatchCityStateAndStreet(city, state, street string) (Match, error) {
 func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		zip = bloomkeys.Normalize(zip)
-		table := compiled_filter.ZipCityNames()
+		table := filters().ZipCityNames()
 		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
 			for _, city := range table.Names(zip, state) {
 				if !yield(state, city) {
@@ -253,7 +280,7 @@ func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 func CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		zip = bloomkeys.Normalize(zip)
-		table := compiled_filter.ZipCityNames()
+		table := filters().ZipCityNames()
 		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
 			for _, city := range table.NamesFrom(zip, state, zipcities.USPS) {
 				if !yield(state, city) {
@@ -272,7 +299,7 @@ func CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
 // the table it inverts is itself fixed for the life of the process.
 var zipsByStateCity = sync.OnceValue(func() map[string][]string {
 	inverted := map[string][]string{}
-	for zip, states := range compiled_filter.ZipCityNames() {
+	for zip, states := range filters().ZipCityNames() {
 		for state, names := range states {
 			for _, name := range names {
 				key := state + ":" + name.City
