@@ -8,10 +8,6 @@ import (
 	"github.com/poetic-systems/zipcity/pkg/filterfs/embedded"
 )
 
-func init() {
-	zipcity.RegisterFS(embedded.PrepareFS)
-}
-
 var testData = []struct {
 	Street string
 	City   string
@@ -149,8 +145,13 @@ func TestCheckZipAndCity(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(embedded.PrepareFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckZipAndCity(tc.Zip, tc.City)
+		found, err := zc.CheckZipAndCity(tc.Zip, tc.City)
 		if err != nil {
 			t.Fatalf("Error checking zip: '%s' and city: '%s': %s", tc.Zip, tc.City, err)
 		}
@@ -178,8 +179,13 @@ func TestCheckZipAndStreet(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(embedded.PrepareFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckZipAndStreet(tc.Zip, tc.Street)
+		found, err := zc.CheckZipAndStreet(tc.Zip, tc.Street)
 		if err != nil {
 			t.Fatalf("Error checking zip: '%s' and street: '%s': %s", tc.Zip, tc.Street, err)
 		}
@@ -209,8 +215,13 @@ func TestCheckCityStateAndStreet(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(embedded.PrepareFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckCityStateAndStreet(tc.City, tc.State, tc.Street)
+		found, err := zc.CheckCityStateAndStreet(tc.City, tc.State, tc.Street)
 		if err != nil {
 			t.Fatalf("Error checking city: '%s' state: '%s' and street: '%s': %s", tc.City, tc.State, tc.Street, err)
 		}

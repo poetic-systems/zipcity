@@ -19,28 +19,68 @@ import (
 	"github.com/poetic-systems/zipcity/pkg/filterfs/embedded"
 )
 
-var zipcityFS filterfs.InitFunc
+type ZipCity struct {
+	fs              filterfs.InitFunc
+	filters         *bloomdata.BloomData
+	zipsByStateCity func() map[string][]string
+}
 
-var filters = sync.OnceValue(func() *bloomdata.BloomData {
-	fmt.Println("Initializing zipcity filesystem")
-	if zipcityFS == nil {
-		// panic(fmt.Errorf("you must register a zipcity filterfs.InitFunc"))
-		RegisterFS(embedded.PrepareFS)
+type Option func(*ZipCity)
+
+func WithFilterFS(ffs filterfs.InitFn) Option {
+	return func(zc *ZipCity) {
+		zc.fs = ffs
 	}
-	files, err := zipcityFS.PrepareFS()
+}
+
+func New(opts ...Option) (*ZipCity, error) {
+	zc := &ZipCity{}
+	for _, opt := range opts {
+		opt(zc)
+	}
+
+	if zc.fs == nil {
+		WithFilterFS(embedded.PrepareFS)(zc)
+	}
+
+	files, err := zc.fs.PrepareFS()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	b, err := bloomdata.New(files)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return b
-})
+	zc.filters = b
 
-func RegisterFS(ffs filterfs.InitFn) {
-	zipcityFS = ffs
+	// zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
+	// to city names — into state and city to the ZIP Codes seen there, keyed
+	// the way CheckZipAndCity keys a city (bloomkeys.Normalize the state,
+	// bloomkeys.City the name) so a caller's spelling and case do not matter.
+	// Built once on first use and sorted then, rather than on every call, since
+	// the table it inverts is itself fixed for the life of the process.
+	zc.zipsByStateCity = sync.OnceValue(func() map[string][]string {
+		inverted := map[string][]string{}
+		for zip, states := range zc.filters.ZipCityNames() {
+			for state, names := range states {
+				for _, name := range names {
+					key := state + ":" + name.City
+					inverted[key] = append(inverted[key], zip)
+				}
+			}
+		}
+		// A name both sources offered lands here once per source, so the codes are
+		// compacted as well as sorted: which sources named a code is not a fact
+		// about the list of codes.
+		for key := range inverted {
+			slices.Sort(inverted[key])
+			inverted[key] = slices.Compact(inverted[key])
+		}
+		return inverted
+	})
+
+	return zc, nil
 }
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
@@ -127,7 +167,7 @@ func match(f *bloom.BloomFilter, key func(street string) string, street string) 
 	return m
 }
 
-func zipStreetFilter(zip, street string) (*bloom.BloomFilter, error) {
+func (zc *ZipCity) zipStreetFilter(zip, street string) (*bloom.BloomFilter, error) {
 	if !zip5pattern.MatchString(zip) {
 		return nil, fmt.Errorf("5-digit zip code required")
 	}
@@ -141,14 +181,14 @@ func zipStreetFilter(zip, street string) (*bloom.BloomFilter, error) {
 		return nil, fmt.Errorf("Unable to identify bloom filter for zip: %w", err)
 	}
 
-	f, err := filters().LoadFilter(filterId)
+	f, err := zc.filters.LoadFilter(filterId)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
 	return f, nil
 }
 
-func cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
+func (zc *ZipCity) cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
 	if len(city) < 1 {
 		return nil, fmt.Errorf("city required")
 	}
@@ -166,7 +206,7 @@ func cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
 		return nil, fmt.Errorf("Unable to identify bloom filter for state: %w", err)
 	}
 
-	f, err := filters().LoadFilter(filterId)
+	f, err := zc.filters.LoadFilter(filterId)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load bloom filter: %w", err)
 	}
@@ -178,7 +218,7 @@ func cityStreetFilter(city, state, street string) (*bloom.BloomFilter, error) {
 // exact answer, with no false positive rate to weigh, read straight from
 // compiled_filter.ZipCityNames() — the same table CitiesKnownFor reads. See
 // poetic-systems/zipcity#55.
-func CheckZipAndCity(zip, city string) (bool, error) {
+func (zc *ZipCity) CheckZipAndCity(zip, city string) (bool, error) {
 	if !zip5pattern.MatchString(zip) {
 		return false, fmt.Errorf("5-digit zip code required")
 	}
@@ -188,7 +228,7 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	}
 
 	name := bloomkeys.City(city)
-	for _, names := range filters().ZipCityNames()[bloomkeys.Normalize(zip)] {
+	for _, names := range zc.filters.ZipCityNames()[bloomkeys.Normalize(zip)] {
 		if slices.ContainsFunc(names, func(n zipcities.Name) bool { return n.City == name }) {
 			return true, nil
 		}
@@ -196,8 +236,8 @@ func CheckZipAndCity(zip, city string) (bool, error) {
 	return false, nil
 }
 
-func CheckZipAndStreet(zip, street string) (bool, error) {
-	f, err := zipStreetFilter(zip, street)
+func (zc *ZipCity) CheckZipAndStreet(zip, street string) (bool, error) {
+	f, err := zc.zipStreetFilter(zip, street)
 	if err != nil {
 		return false, err
 	}
@@ -207,8 +247,8 @@ func CheckZipAndStreet(zip, street string) (bool, error) {
 
 // MatchZipAndStreet is CheckZipAndStreet that also looks for the street's
 // directional variants when the street itself is not found.
-func MatchZipAndStreet(zip, street string) (Match, error) {
-	f, err := zipStreetFilter(zip, street)
+func (zc *ZipCity) MatchZipAndStreet(zip, street string) (Match, error) {
+	f, err := zc.zipStreetFilter(zip, street)
 	if err != nil {
 		return Match{}, err
 	}
@@ -216,8 +256,8 @@ func MatchZipAndStreet(zip, street string) (Match, error) {
 	return match(f, func(s string) string { return bloomkeys.KeyZipStreet(zip, s) }, street), nil
 }
 
-func CheckCityStateAndStreet(city, state, street string) (bool, error) {
-	f, err := cityStreetFilter(city, state, street)
+func (zc *ZipCity) CheckCityStateAndStreet(city, state, street string) (bool, error) {
+	f, err := zc.cityStreetFilter(city, state, street)
 	if err != nil {
 		return false, err
 	}
@@ -227,8 +267,8 @@ func CheckCityStateAndStreet(city, state, street string) (bool, error) {
 
 // MatchCityStateAndStreet is CheckCityStateAndStreet that also looks for the
 // street's directional variants when the street itself is not found.
-func MatchCityStateAndStreet(city, state, street string) (Match, error) {
-	f, err := cityStreetFilter(city, state, street)
+func (zc *ZipCity) MatchCityStateAndStreet(city, state, street string) (Match, error) {
+	f, err := zc.cityStreetFilter(city, state, street)
 	if err != nil {
 		return Match{}, err
 	}
@@ -249,10 +289,10 @@ func MatchCityStateAndStreet(city, state, street string) (Match, error) {
 // name. A code nothing was seen for yields nothing. A caller who needs to
 // weigh the names rather than just enumerate them wants
 // CitiesRecommendedFor. See poetic-systems/zipcity#17.
-func CitiesKnownFor(zip string) iter.Seq2[string, string] {
+func (zc *ZipCity) CitiesKnownFor(zip string) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		zip = bloomkeys.Normalize(zip)
-		table := filters().ZipCityNames()
+		table := zc.filters.ZipCityNames()
 		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
 			for _, city := range table.Names(zip, state) {
 				if !yield(state, city) {
@@ -277,10 +317,10 @@ func CitiesKnownFor(zip string) iter.Seq2[string, string] {
 // came from here. Most codes yield one name, a few yield several where more
 // than one office delivers into them, and one yields none where only stations
 // and branches do. See poetic-systems/zipcity#48.
-func CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
+func (zc *ZipCity) CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 		zip = bloomkeys.Normalize(zip)
-		table := filters().ZipCityNames()
+		table := zc.filters.ZipCityNames()
 		for _, state := range slices.Sorted(maps.Keys(table[zip])) {
 			for _, city := range table.NamesFrom(zip, state, zipcities.USPS) {
 				if !yield(state, city) {
@@ -291,32 +331,6 @@ func CitiesRecommendedFor(zip string) iter.Seq2[string, string] {
 	}
 }
 
-// zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
-// to city names — into state and city to the ZIP Codes seen there, keyed
-// the way CheckZipAndCity keys a city (bloomkeys.Normalize the state,
-// bloomkeys.City the name) so a caller's spelling and case do not matter.
-// Built once on first use and sorted then, rather than on every call, since
-// the table it inverts is itself fixed for the life of the process.
-var zipsByStateCity = sync.OnceValue(func() map[string][]string {
-	inverted := map[string][]string{}
-	for zip, states := range filters().ZipCityNames() {
-		for state, names := range states {
-			for _, name := range names {
-				key := state + ":" + name.City
-				inverted[key] = append(inverted[key], zip)
-			}
-		}
-	}
-	// A name both sources offered lands here once per source, so the codes are
-	// compacted as well as sorted: which sources named a code is not a fact
-	// about the list of codes.
-	for key := range inverted {
-		slices.Sort(inverted[key])
-		inverted[key] = slices.Compact(inverted[key])
-	}
-	return inverted
-})
-
 // ZipsKnownFor yields the ZIP Codes a city name has been seen for in a
 // state, ascending. It is CitiesKnownFor read the other way, for a caller
 // holding a city and state and no ZIP Code to ask about.
@@ -325,10 +339,10 @@ var zipsByStateCity = sync.OnceValue(func() map[string][]string {
 // preferred-first, and a code's absence from it is not evidence against
 // that code. A city nothing was seen for yields nothing. See
 // poetic-systems/addressparsers#17.
-func ZipsKnownFor(state, city string) iter.Seq[string] {
+func (zc *ZipCity) ZipsKnownFor(state, city string) iter.Seq[string] {
 	return func(yield func(string) bool) {
 		key := bloomkeys.Normalize(state) + ":" + bloomkeys.City(city)
-		for _, zip := range zipsByStateCity()[key] {
+		for _, zip := range zc.zipsByStateCity()[key] {
 			if !yield(zip) {
 				return
 			}

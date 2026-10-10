@@ -11,17 +11,15 @@ import (
 	"github.com/poetic-systems/zipcity"
 )
 
-func init() {
-	zipcity.RegisterFS(func() (fs.FS, error) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		datadir := path.Join(cwd, "generated/embedded_filter")
-		fmt.Printf("Standard filesystem Data dir: %q\n", datadir)
-		dirfs := os.DirFS(datadir)
-		return dirfs, nil
-	})
+var filesFilterFS = func() (fs.FS, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	datadir := path.Join(cwd, "generated/embedded_filter")
+	fmt.Printf("Standard filesystem Data dir: %q\n", datadir)
+	dirfs := os.DirFS(datadir)
+	return dirfs, nil
 }
 
 var testData = []struct {
@@ -160,8 +158,13 @@ func TestCheckZipAndCity(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckZipAndCity(tc.Zip, tc.City)
+		found, err := zc.CheckZipAndCity(tc.Zip, tc.City)
 		if err != nil {
 			t.Fatalf("Error checking zip: '%s' and city: '%s': %s", tc.Zip, tc.City, err)
 		}
@@ -189,8 +192,13 @@ func TestCheckZipAndStreet(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckZipAndStreet(tc.Zip, tc.Street)
+		found, err := zc.CheckZipAndStreet(tc.Zip, tc.Street)
 		if err != nil {
 			t.Fatalf("Error checking zip: '%s' and street: '%s': %s", tc.Zip, tc.Street, err)
 		}
@@ -220,8 +228,13 @@ func TestCheckCityStateAndStreet(t *testing.T) {
 		}
 	})
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
-		found, err := zipcity.CheckCityStateAndStreet(tc.City, tc.State, tc.Street)
+		found, err := zc.CheckCityStateAndStreet(tc.City, tc.State, tc.Street)
 		if err != nil {
 			t.Fatalf("Error checking city: '%s' state: '%s' and street: '%s': %s", tc.City, tc.State, tc.Street, err)
 		}
@@ -260,8 +273,13 @@ func TestMatchStreet(t *testing.T) {
 		{"M St", "Washington", "DC", "20002", zipcity.Match{Variants: []string{"M ST NE"}}, variantsAsked},
 	}
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range cases {
-		got, err := zipcity.MatchZipAndStreet(tc.Zip, tc.Street)
+		got, err := zc.MatchZipAndStreet(tc.Zip, tc.Street)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -272,7 +290,7 @@ func TestMatchStreet(t *testing.T) {
 			t.Fatalf("Expected zip: '%s' and street: '%s' to have Asked %d, got %d", tc.Zip, tc.Street, tc.WantAsked, got.Asked)
 		}
 	}
-	city, err := zipcity.MatchCityStateAndStreet("Washington", "DC", "M St")
+	city, err := zc.MatchCityStateAndStreet("Washington", "DC", "M St")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,9 +344,14 @@ func TestCitiesKnownFor(t *testing.T) {
 		{"2017", nil},
 	}
 
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
 	for _, tc := range testcases {
 		var got []StateAndCity
-		for state, city := range zipcity.CitiesKnownFor(tc.Zip) {
+		for state, city := range zc.CitiesKnownFor(tc.Zip) {
 			got = append(got, StateAndCity{state, city})
 		}
 		if !slices.Equal(got, tc.Want) {
@@ -343,7 +366,12 @@ func TestCitiesKnownFor(t *testing.T) {
 // allow for. Under the old filter this pair would have come back false
 // 99.5% of the time; now it is always false.
 func TestCheckZipAndCityExact(t *testing.T) {
-	found, err := zipcity.CheckZipAndCity("84088", "Nowhereville")
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
+	found, err := zc.CheckZipAndCity("84088", "Nowhereville")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,21 +381,26 @@ func TestCheckZipAndCityExact(t *testing.T) {
 }
 
 func TestZipsKnownFor(t *testing.T) {
-	got := slices.Collect(zipcity.ZipsKnownFor("UT", "West Jordan"))
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
+	got := slices.Collect(zc.ZipsKnownFor("UT", "West Jordan"))
 	if !slices.Contains(got, "84088") {
 		t.Errorf("ZipsKnownFor(UT, West Jordan) = %v, want it to contain 84088", got)
 	}
 
 	// A city nothing was seen for yields nothing.
-	if got := slices.Collect(zipcity.ZipsKnownFor("UT", "Nowhereville")); got != nil {
+	if got := slices.Collect(zc.ZipsKnownFor("UT", "Nowhereville")); got != nil {
 		t.Errorf("ZipsKnownFor(UT, Nowhereville) = %v, want nothing", got)
 	}
 
 	// West Palm Beach and Palm Beach are both known in Florida, and neither
 	// ZIP Code list is empty, but they are different places: no ZIP Code
 	// carries both names.
-	westPalmBeach := slices.Collect(zipcity.ZipsKnownFor("FL", "West Palm Beach"))
-	palmBeach := slices.Collect(zipcity.ZipsKnownFor("FL", "Palm Beach"))
+	westPalmBeach := slices.Collect(zc.ZipsKnownFor("FL", "West Palm Beach"))
+	palmBeach := slices.Collect(zc.ZipsKnownFor("FL", "Palm Beach"))
 	if len(westPalmBeach) == 0 || len(palmBeach) == 0 {
 		t.Fatalf("ZipsKnownFor(FL, West Palm Beach) = %v, ZipsKnownFor(FL, Palm Beach) = %v, want both non-empty", westPalmBeach, palmBeach)
 	}
@@ -381,9 +414,14 @@ func TestZipsKnownFor(t *testing.T) {
 // ZipsKnownFor is CitiesKnownFor read the other way: every code it yields
 // for a city and state must itself yield that city under that state.
 func TestZipsKnownForRoundTripsWithCitiesKnownFor(t *testing.T) {
-	for zip := range zipcity.ZipsKnownFor("UT", "West Jordan") {
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
+	for zip := range zc.ZipsKnownFor("UT", "West Jordan") {
 		found := false
-		for state, city := range zipcity.CitiesKnownFor(zip) {
+		for state, city := range zc.CitiesKnownFor(zip) {
 			if state == "UT" && city == "WEST JORDAN" {
 				found = true
 				break
