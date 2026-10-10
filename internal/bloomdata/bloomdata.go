@@ -93,7 +93,6 @@ func (b *BloomData) init() error {
 	b.zip_city_names = t
 
 	computedSha256 := hex.EncodeToString(h.Sum(nil))
-	fmt.Printf("Compiled SHA256: %q\nComputed SHA256: %q\n", compiled_filter.DataFilesSHA256, computedSha256)
 
 	// check the hash of filter files
 	if compiled_filter.DataFilesSHA256 != computedSha256 {
