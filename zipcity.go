@@ -16,7 +16,7 @@ import (
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 	"github.com/poetic-systems/zipcity/pkg/filterfs"
-	"github.com/poetic-systems/zipcity/pkg/filterfs/gitcache"
+	"github.com/poetic-systems/zipcity/pkg/filterfs/embedded"
 )
 
 var zipcityFS filterfs.InitFunc
@@ -25,7 +25,7 @@ var filters = sync.OnceValue(func() *bloomdata.BloomData {
 	fmt.Println("Initializing zipcity filesystem")
 	if zipcityFS == nil {
 		// panic(fmt.Errorf("you must register a zipcity filterfs.InitFunc"))
-		RegisterFS(gitcache.PrepareFS)
+		RegisterFS(embedded.PrepareFS)
 	}
 	files, err := zipcityFS.PrepareFS()
 	if err != nil {
