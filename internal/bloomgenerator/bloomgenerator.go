@@ -345,7 +345,7 @@ func main() {
 	// if its hashing algorithm is working properly.
 
 	// generate a hash of all of the files we write so we can ensure we have the same
-	// files when we load them from a filterfs.IntFn provided fs.FS
+	// files when we load them from a filterfs.InitFunc provided fs.FS
 	h := sha256.New()
 	h.Reset()
 
@@ -475,7 +475,7 @@ func main() {
 		numUspsZip2City+numMilitaryZip2City, len(uspszips), numMilitaryZip2City,
 		len(differing), strings.Join(differing[:min(20, len(differing))], ", "))
 
-	// write the zip-city-names.tsv file after all of the bllom filters so the hash
+	// write the zip-city-names.tsv file after all of the bloom filters so the hash
 	// gets calculated in the expected order.
 	err = writeZipCityNames(
 		path.Join(filterDir, "zip-city-names.tsv"),

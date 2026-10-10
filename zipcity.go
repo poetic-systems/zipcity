@@ -20,14 +20,14 @@ import (
 )
 
 type ZipCity struct {
-	fs              filterfs.InitFunc
+	fs              filterfs.Init
 	filters         *bloomdata.BloomData
 	zipsByStateCity func() map[string][]string
 }
 
 type Option func(*ZipCity)
 
-func WithFilterFS(ffs filterfs.InitFn) Option {
+func WithFilterFS(ffs filterfs.InitFunc) Option {
 	return func(zc *ZipCity) {
 		zc.fs = ffs
 	}
