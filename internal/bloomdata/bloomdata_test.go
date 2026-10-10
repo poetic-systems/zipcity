@@ -23,7 +23,7 @@ func testFS(t *testing.T) fs.FS {
 }
 
 // overrideFS wraps a base filesystem but substitutes the bytes at one path,
-// so a test can simulate a corrupted or hash-mismatched filter file without
+// so a test can simulate a corrupted or hash-mismatched file without
 // touching any of the real committed data.
 type overrideFS struct {
 	base fs.FS
@@ -59,27 +59,32 @@ func TestLoadFilter_CachesOnRepeatCalls(t *testing.T) {
 	}
 }
 
-// A hash mismatch on one filter must not take down any other filter — the
-// whole point of going per-filter lazy rather than eager-decode-all-at-init.
-func TestLoadFilter_HashMismatchErrorsIndependently(t *testing.T) {
+// New's whole-filesystem integrity check (Aaron, zipcity#73/#74,
+// 2026-10-10) must catch a tampered filter file loudly at construction,
+// not silently on whichever lazy LoadFilter call happens to touch it.
+func TestNew_HashMismatchFailsAtConstruction(t *testing.T) {
 	bad := &overrideFS{
 		base: testFS(t),
 		path: path.Join("data", "city-street-AK.bin"),
 		data: []byte("not a real bloom filter"),
 	}
-	b, err := bloomdata.New(bad)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
 
-	if _, err := b.LoadFilter(compiled_filter.CityStreetAK); err == nil {
+	if _, err := bloomdata.New(bad); err == nil {
 		t.Fatalf("expected a hash mismatch error for the tampered filter, got nil")
 	}
+}
 
-	// A different filter, whose bytes the override never touched, must still
-	// load cleanly — the AK failure must stay scoped to AK.
-	if _, err := b.LoadFilter(compiled_filter.CityStreetAL); err != nil {
-		t.Fatalf("expected the unaffected filter to load, got error: %v", err)
+// The ZIP/city names table is part of the same up-front integrity sweep as
+// the bloom filters, not a separately-trusted file.
+func TestNew_ZipCityNamesHashMismatchFailsAtConstruction(t *testing.T) {
+	bad := &overrideFS{
+		base: testFS(t),
+		path: path.Join("data", "zip-city-names.tsv"),
+		data: []byte("not the real names table"),
+	}
+
+	if _, err := bloomdata.New(bad); err == nil {
+		t.Fatalf("expected a hash mismatch error for the tampered names table, got nil")
 	}
 }
 
@@ -106,5 +111,65 @@ func TestZipCityNames_IndependentOfFilterLoading(t *testing.T) {
 	table2 := b.ZipCityNames()
 	if len(table2) != len(table) {
 		t.Fatalf("expected repeat ZipCityNames call to return the same table")
+	}
+}
+
+// Loading a third distinct filter against a cache bounded to 2 must evict
+// the least-recently-used one (AK, touched first and never touched again),
+// forcing it to be read and decoded again on its next request.
+func TestLoadFilter_EvictsLeastRecentlyUsed(t *testing.T) {
+	b, err := bloomdata.New(testFS(t), bloomdata.WithCacheSize(2))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	first, err := b.LoadFilter(compiled_filter.CityStreetAK)
+	if err != nil {
+		t.Fatalf("LoadFilter AK: %v", err)
+	}
+	if _, err := b.LoadFilter(compiled_filter.CityStreetAL); err != nil {
+		t.Fatalf("LoadFilter AL: %v", err)
+	}
+	if _, err := b.LoadFilter(compiled_filter.CityStreetAR); err != nil {
+		t.Fatalf("LoadFilter AR: %v", err)
+	}
+
+	firstAgain, err := b.LoadFilter(compiled_filter.CityStreetAK)
+	if err != nil {
+		t.Fatalf("LoadFilter AK again: %v", err)
+	}
+	if first == firstAgain {
+		t.Fatalf("expected AK to have been evicted and re-decoded, got the same cached instance")
+	}
+}
+
+// Re-touching AK keeps it more recently used than AL, so loading a third
+// distinct filter must evict AL instead, not AK.
+func TestLoadFilter_RecentAccessIsNotEvicted(t *testing.T) {
+	b, err := bloomdata.New(testFS(t), bloomdata.WithCacheSize(2))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	first, err := b.LoadFilter(compiled_filter.CityStreetAK)
+	if err != nil {
+		t.Fatalf("LoadFilter AK: %v", err)
+	}
+	if _, err := b.LoadFilter(compiled_filter.CityStreetAL); err != nil {
+		t.Fatalf("LoadFilter AL: %v", err)
+	}
+	if _, err := b.LoadFilter(compiled_filter.CityStreetAK); err != nil {
+		t.Fatalf("LoadFilter AK (re-touch): %v", err)
+	}
+	if _, err := b.LoadFilter(compiled_filter.CityStreetAR); err != nil {
+		t.Fatalf("LoadFilter AR: %v", err)
+	}
+
+	firstAgain, err := b.LoadFilter(compiled_filter.CityStreetAK)
+	if err != nil {
+		t.Fatalf("LoadFilter AK again: %v", err)
+	}
+	if first != firstAgain {
+		t.Fatalf("expected AK to still be cached since it was the most recently touched entry")
 	}
 }
