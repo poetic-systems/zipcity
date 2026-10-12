@@ -302,6 +302,33 @@ func TestMatchStreet(t *testing.T) {
 	}
 }
 
+// TestMatchCacheSizeNegativeDisablesCache checks that a negative
+// WithMatchCacheSize does not break MatchZipAndStreet or
+// MatchCityStateAndStreet — it only disables their memoization, which
+// internal/matchcache tests directly.
+func TestMatchCacheSizeNegativeDisablesCache(t *testing.T) {
+	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS), zipcity.WithMatchCacheSize(-1))
+	if err != nil {
+		t.Fatalf("Error creating ZipCity instance: %s", err)
+	}
+
+	for _, td := range testData[:2] {
+		for range 2 {
+			got, err := zc.MatchZipAndStreet(td.Zip, td.Street)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.Exact && len(got.Variants) == 0 {
+				t.Fatalf("Expected zip: '%s' and street: '%s' to be found", td.Zip, td.Street)
+			}
+
+			if _, err := zc.MatchCityStateAndStreet(td.City, td.State, td.Street); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 // TestFalsePositiveRate pins the rates the checked-in filters were built
 // with, so a caller weighing a Match's Asked against one is weighing the
 // right number.

@@ -1,4 +1,4 @@
-package zipcity_test
+package benchmark
 
 import (
 	"testing"
@@ -6,13 +6,24 @@ import (
 	"github.com/poetic-systems/zipcity"
 )
 
-// Simulates go-projectusat#194's finding: several candidate readings per
-// address ask the exact same (zip, street) / (city, state, street) pair.
-// repeatsPerQuery models that fan-out.
+// repeatsPerQuery simulates go-projectusat#194's finding: several candidate
+// readings per address ask the exact same (zip, street) / (city, state,
+// street) pair.
 const repeatsPerQuery = 6
 
+var testData = []struct {
+	Street string
+	City   string
+	State  string
+	Zip    string
+}{
+	{"BLUE RIDGE DR", "MARTINEZ", "CA", "94553"},
+	{"W 200 N", "NORTH SALT LAKE", "UT", "84054"},
+	{"CALLE LOIZA", "San Juan", "PR", "00909"},
+}
+
 func BenchmarkMatchZipAndStreetRepeated(b *testing.B) {
-	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	zc, err := zipcity.New()
 	if err != nil {
 		b.Fatalf("New: %v", err)
 	}
@@ -29,7 +40,7 @@ func BenchmarkMatchZipAndStreetRepeated(b *testing.B) {
 }
 
 func BenchmarkMatchCityStateAndStreetRepeated(b *testing.B) {
-	zc, err := zipcity.New(zipcity.WithFilterFS(filesFilterFS))
+	zc, err := zipcity.New()
 	if err != nil {
 		b.Fatalf("New: %v", err)
 	}

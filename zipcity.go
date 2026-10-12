@@ -14,18 +14,36 @@ import (
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
 	"github.com/poetic-systems/zipcity/internal/bloomdata"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/matchcache"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 	"github.com/poetic-systems/zipcity/pkg/filterfs"
 	"github.com/poetic-systems/zipcity/pkg/filterfs/embedded"
 )
+
+// DefaultMatchCacheSize is how many distinct Match results New's ZipCity
+// keeps per cache when New is not given WithMatchCacheSize. go-projectusat
+// generates several candidate readings per address and often asks the same
+// (zip, street) or (city, state, street) pair more than once while doing
+// so (poetic-systems/zipcity#75) — 4096 is an assumed starting point sized
+// to cover a request's worth of candidates many times over, not a measured
+// one.
+const DefaultMatchCacheSize = 4096
+
+type zipStreetKey struct {
+	zip, street string
+}
+
+type cityStateStreetKey struct {
+	city, state, street string
+}
 
 type ZipCity struct {
 	fs                   filterfs.Init
 	filters              *bloomdata.BloomData
 	zipsByStateCity      func() map[string][]string
 	matchCacheSize       int
-	zipStreetCache       *matchCache[zipStreetKey]
-	cityStateStreetCache *matchCache[cityStateStreetKey]
+	zipStreetCache       *matchcache.Cache[zipStreetKey, Match]
+	cityStateStreetCache *matchcache.Cache[cityStateStreetKey, Match]
 }
 
 type Option func(*ZipCity)
@@ -38,7 +56,9 @@ func WithFilterFS(ffs filterfs.InitFunc) Option {
 
 // WithMatchCacheSize bounds how many distinct MatchZipAndStreet results and
 // how many distinct MatchCityStateAndStreet results New's ZipCity each keep
-// before evicting the least-recently-used one. n must be at least 1.
+// before evicting the least-recently-used one. A negative n disables both
+// caches; MatchZipAndStreet and MatchCityStateAndStreet still work, just
+// without memoization. n == 0 is "not set" and selects DefaultMatchCacheSize.
 func WithMatchCacheSize(n int) Option {
 	return func(zc *ZipCity) {
 		zc.matchCacheSize = n
@@ -68,8 +88,8 @@ func New(opts ...Option) (*ZipCity, error) {
 	}
 
 	zc.filters = b
-	zc.zipStreetCache = newMatchCache[zipStreetKey](zc.matchCacheSize)
-	zc.cityStateStreetCache = newMatchCache[cityStateStreetKey](zc.matchCacheSize)
+	zc.zipStreetCache = matchcache.New[zipStreetKey, Match](zc.matchCacheSize)
+	zc.cityStateStreetCache = matchcache.New[cityStateStreetKey, Match](zc.matchCacheSize)
 
 	// zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
 	// to city names — into state and city to the ZIP Codes seen there, keyed
@@ -271,7 +291,7 @@ func (zc *ZipCity) CheckZipAndStreet(zip, street string) (bool, error) {
 // poetic-systems/zipcity#75.
 func (zc *ZipCity) MatchZipAndStreet(zip, street string) (Match, error) {
 	key := zipStreetKey{zip: zip, street: street}
-	if m, ok := zc.zipStreetCache.get(key); ok {
+	if m, ok := zc.zipStreetCache.Get(key); ok {
 		return m, nil
 	}
 
@@ -281,7 +301,7 @@ func (zc *ZipCity) MatchZipAndStreet(zip, street string) (Match, error) {
 	}
 
 	m := match(f, func(s string) string { return bloomkeys.KeyZipStreet(zip, s) }, street)
-	zc.zipStreetCache.add(key, m)
+	zc.zipStreetCache.Add(key, m)
 	return m, nil
 }
 
@@ -300,7 +320,7 @@ func (zc *ZipCity) CheckCityStateAndStreet(city, state, street string) (bool, er
 // poetic-systems/zipcity#75.
 func (zc *ZipCity) MatchCityStateAndStreet(city, state, street string) (Match, error) {
 	key := cityStateStreetKey{city: city, state: state, street: street}
-	if m, ok := zc.cityStateStreetCache.get(key); ok {
+	if m, ok := zc.cityStateStreetCache.Get(key); ok {
 		return m, nil
 	}
 
@@ -310,7 +330,7 @@ func (zc *ZipCity) MatchCityStateAndStreet(city, state, street string) (Match, e
 	}
 
 	m := match(f, func(s string) string { return bloomkeys.KeyCityStateStreet(city, state, s) }, street)
-	zc.cityStateStreetCache.add(key, m)
+	zc.cityStateStreetCache.Add(key, m)
 	return m, nil
 }
 
