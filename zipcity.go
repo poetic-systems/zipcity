@@ -20,9 +20,12 @@ import (
 )
 
 type ZipCity struct {
-	fs              filterfs.Init
-	filters         *bloomdata.BloomData
-	zipsByStateCity func() map[string][]string
+	fs                   filterfs.Init
+	filters              *bloomdata.BloomData
+	zipsByStateCity      func() map[string][]string
+	matchCacheSize       int
+	zipStreetCache       *matchCache[zipStreetKey]
+	cityStateStreetCache *matchCache[cityStateStreetKey]
 }
 
 type Option func(*ZipCity)
@@ -30,6 +33,15 @@ type Option func(*ZipCity)
 func WithFilterFS(ffs filterfs.InitFunc) Option {
 	return func(zc *ZipCity) {
 		zc.fs = ffs
+	}
+}
+
+// WithMatchCacheSize bounds how many distinct MatchZipAndStreet results and
+// how many distinct MatchCityStateAndStreet results New's ZipCity each keep
+// before evicting the least-recently-used one. n must be at least 1.
+func WithMatchCacheSize(n int) Option {
+	return func(zc *ZipCity) {
+		zc.matchCacheSize = n
 	}
 }
 
@@ -42,6 +54,9 @@ func New(opts ...Option) (*ZipCity, error) {
 	if zc.fs == nil {
 		WithFilterFS(embedded.PrepareFS)(zc)
 	}
+	if zc.matchCacheSize == 0 {
+		WithMatchCacheSize(DefaultMatchCacheSize)(zc)
+	}
 
 	files, err := zc.fs.PrepareFS()
 	if err != nil {
@@ -53,6 +68,8 @@ func New(opts ...Option) (*ZipCity, error) {
 	}
 
 	zc.filters = b
+	zc.zipStreetCache = newMatchCache[zipStreetKey](zc.matchCacheSize)
+	zc.cityStateStreetCache = newMatchCache[cityStateStreetKey](zc.matchCacheSize)
 
 	// zipsByStateCity inverts compiled_filter.ZipCityNames() — ZIP Code to state
 	// to city names — into state and city to the ZIP Codes seen there, keyed
@@ -246,14 +263,26 @@ func (zc *ZipCity) CheckZipAndStreet(zip, street string) (bool, error) {
 }
 
 // MatchZipAndStreet is CheckZipAndStreet that also looks for the street's
-// directional variants when the street itself is not found.
+// directional variants when the street itself is not found. go-projectusat
+// generates several candidate readings per address, and more than one of
+// them often asks this exact (zip, street) pair — so the result is
+// memoized: the filter data underneath it cannot change within a process,
+// making this a pure CPU optimization at the cost of some memory. See
+// poetic-systems/zipcity#75.
 func (zc *ZipCity) MatchZipAndStreet(zip, street string) (Match, error) {
+	key := zipStreetKey{zip: zip, street: street}
+	if m, ok := zc.zipStreetCache.get(key); ok {
+		return m, nil
+	}
+
 	f, err := zc.zipStreetFilter(zip, street)
 	if err != nil {
 		return Match{}, err
 	}
 
-	return match(f, func(s string) string { return bloomkeys.KeyZipStreet(zip, s) }, street), nil
+	m := match(f, func(s string) string { return bloomkeys.KeyZipStreet(zip, s) }, street)
+	zc.zipStreetCache.add(key, m)
+	return m, nil
 }
 
 func (zc *ZipCity) CheckCityStateAndStreet(city, state, street string) (bool, error) {
@@ -267,13 +296,22 @@ func (zc *ZipCity) CheckCityStateAndStreet(city, state, street string) (bool, er
 
 // MatchCityStateAndStreet is CheckCityStateAndStreet that also looks for the
 // street's directional variants when the street itself is not found.
+// Memoized for the same reason as MatchZipAndStreet — see its comment and
+// poetic-systems/zipcity#75.
 func (zc *ZipCity) MatchCityStateAndStreet(city, state, street string) (Match, error) {
+	key := cityStateStreetKey{city: city, state: state, street: street}
+	if m, ok := zc.cityStateStreetCache.get(key); ok {
+		return m, nil
+	}
+
 	f, err := zc.cityStreetFilter(city, state, street)
 	if err != nil {
 		return Match{}, err
 	}
 
-	return match(f, func(s string) string { return bloomkeys.KeyCityStateStreet(city, state, s) }, street), nil
+	m := match(f, func(s string) string { return bloomkeys.KeyCityStateStreet(city, state, s) }, street)
+	zc.cityStateStreetCache.add(key, m)
+	return m, nil
 }
 
 // CitiesKnownFor yields the state and city names known for a ZIP Code —
