@@ -66,3 +66,11 @@ func KeyZipCity(zip, city string) string {
 func KeyCityStateStreet(city, state, street string) string {
 	return fmt.Sprintf("%s:%s:%s", City(city), Normalize(state), Normalize(street))
 }
+
+func KeyConflictedAbbreviationNextWord(conflicted string, next string) string {
+	return fmt.Sprintf("conflicted-next-word:%s:%s", Normalize(conflicted), Normalize(next))
+}
+
+func KeyConflictedAbbreviationPreviousWord(conflicted string, prev string) string {
+	return fmt.Sprintf("conflicted-prvious-word:%s:%s", Normalize(prev), Normalize(conflicted))
+}

@@ -28,6 +28,7 @@ import (
 	"github.com/poetic-systems/zipcity/internal/areazip"
 	"github.com/poetic-systems/zipcity/internal/bloomfilename"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/conflictedabrev"
 	"github.com/poetic-systems/zipcity/internal/usgeonames"
 	"github.com/poetic-systems/zipcity/internal/ustigerline"
 	"github.com/poetic-systems/zipcity/internal/usziplocale"
@@ -104,6 +105,7 @@ func main() {
 	zipStreetData := map[string]map[string]ZipStreetTuple{}
 	zipCityData := map[string]ZipCityTuple{}
 	cityStreetData := map[string]map[string]CityStreetTuple{}
+	conflictedAbreviationData := map[string]bool{}
 
 	// Cache the census data locally if we don't already have it
 	prefixes, absent, err := ustigerline.DownloadAllRequiredTigerfiles()
@@ -267,6 +269,22 @@ func main() {
 				// PACIFIC RR, CLL LOIZA), which no caller in spec form sends.
 				// See #1.
 				streetnames = side.Street.Alt
+				for _, stname := range streetnames {
+					streetparts := strings.Split(stname, " ")
+					for i, stp := range streetparts {
+						cabv := conflictedabrev.Info(stp)
+						if cabv != nil {
+							if i > 0 && len(streetparts[i-1]) > 0 {
+								pkey := bloomkeys.KeyConflictedAbbreviationPreviousWord(stp, streetparts[i-1])
+								conflictedAbreviationData[pkey] = true
+							}
+							if i < len(streetparts)-2 && len(streetparts[i+1]) > 0 {
+								nkey := bloomkeys.KeyConflictedAbbreviationNextWord(stp, streetparts[i+1])
+								conflictedAbreviationData[nkey] = true
+							}
+						}
+					}
+				}
 			}
 
 			// Addresses at each end of a street may be served by different
@@ -480,6 +498,42 @@ func main() {
 	err = writeZipCityNames(
 		path.Join(filterDir, "zip-city-names.tsv"),
 		names,
+		h,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Pick up any ST, MT, or other conflicted abbreviation sequences from city names too
+	for _, zip := range slices.Sorted(maps.Keys(names)) {
+		for _, state := range slices.Sorted(maps.Keys(names[zip])) {
+			for _, cityname := range names.Names(zip, state) {
+				cityparts := strings.Split(cityname, " ")
+				for i, cp := range cityparts {
+					cabv := conflictedabrev.Info(cp)
+					if cabv != nil {
+						if i > 0 && len(cityparts[i-1]) > 0 {
+							pkey := bloomkeys.KeyConflictedAbbreviationPreviousWord(cp, cityparts[i-1])
+							conflictedAbreviationData[pkey] = true
+						}
+						if i < len(cityparts)-2 && len(cityparts[i+1]) > 0 {
+							nkey := bloomkeys.KeyConflictedAbbreviationNextWord(cp, cityparts[i+1])
+							conflictedAbreviationData[nkey] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	numconflicted := uint(len(conflictedAbreviationData))
+	log.Printf("Conflicted abbreviation tuples: %d", numconflicted)
+	conflictedFilter := bloom.NewWithEstimates(numconflicted, cityStreetFalsePositiveRate)
+	err = serialize(
+		path.Join(
+			filterDir,
+			bloomfilename.Filename("conflicted-abbreviation"),
+		),
+		conflictedFilter,
 		h,
 	)
 	if err != nil {
