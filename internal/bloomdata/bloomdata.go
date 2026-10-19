@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -22,7 +23,14 @@ type BloomData struct {
 	Hash           []byte
 	bloom_filters  map[compiled_filter.CompiledFilter]*bloom.BloomFilter
 	zip_city_names zipcities.Table
+	conflicted     *bloom.BloomFilter
 }
+
+// ConflictedAbbreviationFilter names the filter of word pairs around
+// abbreviations that read more than one way (CT, MT, NE, ST, DR). It is
+// not a compiled_filter: it is built from street and city names together,
+// after the zip-city names are written, and is hashed after them.
+const ConflictedAbbreviationFilter = "conflicted-abbreviation"
 
 func New(bloomDir fs.FS) (*BloomData, error) {
 	b := &BloomData{
@@ -92,6 +100,22 @@ func (b *BloomData) init() error {
 
 	b.zip_city_names = t
 
+	// Data generated before the conflicted-abbreviation filter existed has no
+	// such file, and its hash is of what it does have.
+	conflictedData, err := readFS.ReadFile(path.Join("data", bloomfilename.Filename(ConflictedAbbreviationFilter)))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return err
+	default:
+		filter := &bloom.BloomFilter{}
+		_, err = filter.ReadFrom(io.TeeReader(bytes.NewReader(conflictedData), h))
+		if err != nil {
+			return fmt.Errorf("Failed to read %s bloom filter: %w", ConflictedAbbreviationFilter, err)
+		}
+		b.conflicted = filter
+	}
+
 	computedSha256 := hex.EncodeToString(h.Sum(nil))
 
 	// check the hash of filter files
@@ -118,4 +142,10 @@ func (b *BloomData) LoadFilter(name compiled_filter.CompiledFilter) (*bloom.Bloo
 		return nil, fmt.Errorf("Unsupported compiled filter: %s", name)
 	}
 	return filter, nil
+}
+
+// ConflictedAbbreviation is the conflicted-abbreviation filter, or nil when
+// the data was generated without one.
+func (b *BloomData) ConflictedAbbreviation() *bloom.BloomFilter {
+	return b.conflicted
 }

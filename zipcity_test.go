@@ -459,3 +459,16 @@ func TestZipsKnownForRoundTripsWithCitiesKnownFor(t *testing.T) {
 		}
 	}
 }
+
+// The embedded data predates the conflicted-abbreviation filter (it is
+// generated from TIGER, see poetic-systems/zipcity#79), so asking is an
+// error rather than an empty answer; the rest of the data still loads.
+func TestConflictedAbbreviationReadingsWithoutFilter(t *testing.T) {
+	zc, err := zipcity.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zc.ConflictedAbbreviationReadings("MT", "", "ZION"); err == nil {
+		t.Skip("embedded data has the conflicted-abbreviation filter; test its answers instead")
+	}
+}

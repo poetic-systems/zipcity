@@ -72,5 +72,5 @@ func KeyConflictedAbbreviationNextWord(conflicted string, next string) string {
 }
 
 func KeyConflictedAbbreviationPreviousWord(conflicted string, prev string) string {
-	return fmt.Sprintf("conflicted-prvious-word:%s:%s", Normalize(prev), Normalize(conflicted))
+	return fmt.Sprintf("conflicted-previous-word:%s:%s", Normalize(prev), Normalize(conflicted))
 }

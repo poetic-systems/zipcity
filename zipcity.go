@@ -14,6 +14,7 @@ import (
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
 	"github.com/poetic-systems/zipcity/internal/bloomdata"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/conflictedabrev"
 	"github.com/poetic-systems/zipcity/internal/matchcache"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
 	"github.com/poetic-systems/zipcity/pkg/filterfs"
@@ -271,6 +272,35 @@ func (zc *ZipCity) CheckZipAndCity(zip, city string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// ConflictedAbbreviationFalsePositiveRate is the false positive rate the
+// conflicted-abbreviation filter was built with: the generator builds it at
+// CityStreetFalsePositiveRate.
+const ConflictedAbbreviationFalsePositiveRate = compiled_filter.CityStreetFalsePositiveRate
+
+// ConflictedAbbreviationReadings says which readings of a conflicted word
+// (CT: COURT or CONNECTICUT; MT: MOUNT or MONTANA; NE; ST; DR) the street and
+// city names in the data support beside the words around it. prev and next
+// are the words before and after it in the name, either empty when the word
+// is first or last. MT beside ZION supports MOUNT, since MOUNT ZION is a
+// name and MONTANA ZION is not.
+//
+// Readings come back abbreviation first, then in the order the spellings
+// are listed for it. None means the data has never seen the word beside
+// those neighbors; more than one means more than one reading fits, or a
+// false positive, which the filter cannot tell apart. Each reading is wrong
+// at ConflictedAbbreviationFalsePositiveRate. A word that is not conflicted
+// has no readings.
+//
+// It is an error to ask of data generated before the filter existed. See
+// poetic-systems/zipcity#79.
+func (zc *ZipCity) ConflictedAbbreviationReadings(word, prev, next string) ([]string, error) {
+	f := zc.filters.ConflictedAbbreviation()
+	if f == nil {
+		return nil, fmt.Errorf("conflicted abbreviation filter not in this data")
+	}
+	return conflictedabrev.Readings(f, word, prev, next), nil
 }
 
 func (zc *ZipCity) CheckZipAndStreet(zip, street string) (bool, error) {

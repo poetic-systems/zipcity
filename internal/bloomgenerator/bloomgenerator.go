@@ -270,19 +270,8 @@ func main() {
 				// See #1.
 				streetnames = side.Street.Alt
 				for _, stname := range streetnames {
-					streetparts := strings.Split(stname, " ")
-					for i, stp := range streetparts {
-						cabv := conflictedabrev.Info(stp)
-						if cabv != nil {
-							if i > 0 && len(streetparts[i-1]) > 0 {
-								pkey := bloomkeys.KeyConflictedAbbreviationPreviousWord(stp, streetparts[i-1])
-								conflictedAbreviationData[pkey] = true
-							}
-							if i < len(streetparts)-2 && len(streetparts[i+1]) > 0 {
-								nkey := bloomkeys.KeyConflictedAbbreviationNextWord(stp, streetparts[i+1])
-								conflictedAbreviationData[nkey] = true
-							}
-						}
+					for key := range conflictedabrev.Keys(stname) {
+						conflictedAbreviationData[key] = true
 					}
 				}
 			}
@@ -508,19 +497,8 @@ func main() {
 	for _, zip := range slices.Sorted(maps.Keys(names)) {
 		for _, state := range slices.Sorted(maps.Keys(names[zip])) {
 			for _, cityname := range names.Names(zip, state) {
-				cityparts := strings.Split(cityname, " ")
-				for i, cp := range cityparts {
-					cabv := conflictedabrev.Info(cp)
-					if cabv != nil {
-						if i > 0 && len(cityparts[i-1]) > 0 {
-							pkey := bloomkeys.KeyConflictedAbbreviationPreviousWord(cp, cityparts[i-1])
-							conflictedAbreviationData[pkey] = true
-						}
-						if i < len(cityparts)-2 && len(cityparts[i+1]) > 0 {
-							nkey := bloomkeys.KeyConflictedAbbreviationNextWord(cp, cityparts[i+1])
-							conflictedAbreviationData[nkey] = true
-						}
-					}
+				for key := range conflictedabrev.Keys(cityname) {
+					conflictedAbreviationData[key] = true
 				}
 			}
 		}
@@ -528,6 +506,9 @@ func main() {
 	numconflicted := uint(len(conflictedAbreviationData))
 	log.Printf("Conflicted abbreviation tuples: %d", numconflicted)
 	conflictedFilter := bloom.NewWithEstimates(numconflicted, cityStreetFalsePositiveRate)
+	for key := range conflictedAbreviationData {
+		conflictedFilter.AddString(key)
+	}
 	err = serialize(
 		path.Join(
 			filterDir,
