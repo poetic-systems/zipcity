@@ -72,6 +72,25 @@ func TestReadings(t *testing.T) {
 	}
 }
 
+// The key holds the spelling the name was written with, so a filter that saw
+// MOUNT ZION and MONTANA TREASURE tells the two apart for the same MT.
+func TestReadingsKeepsPairing(t *testing.T) {
+	f := filterOf("MOUNT ZION", "MONTANA TREASURE")
+	cases := []struct {
+		Next string
+		Want []string
+	}{
+		{"ZION", []string{"MOUNT"}},
+		{"TREASURE", []string{"MONTANA"}},
+	}
+	for _, tc := range cases {
+		got := conflictedabrev.Readings(f, "MT", "", tc.Next)
+		if !slices.Equal(got, tc.Want) {
+			t.Errorf("Readings(MT, %q) = %v, want %v", tc.Next, got, tc.Want)
+		}
+	}
+}
+
 func TestReadingsMoreThanOne(t *testing.T) {
 	f := filterOf("MOUNT ZION", "MT ZION")
 	got := conflictedabrev.Readings(f, "MT", "", "ZION")
