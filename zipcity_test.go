@@ -460,15 +460,28 @@ func TestZipsKnownForRoundTripsWithCitiesKnownFor(t *testing.T) {
 	}
 }
 
-// The embedded data predates the conflicted-abbreviation filter (it is
-// generated from TIGER, see poetic-systems/zipcity#79), so asking is an
-// error rather than an empty answer; the rest of the data still loads.
-func TestConflictedAbbreviationReadingsWithoutFilter(t *testing.T) {
+// Answers from the embedded TIGER-generated filter: MOUNT ZION and MONTANA SKY
+// are real names, so MT beside each supports the matching reading. (MONTANA
+// TREASURE is not in the data yet; see the review on zipcity#79.)
+func TestConflictedAbbreviationReadings(t *testing.T) {
 	zc, err := zipcity.New()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := zc.ConflictedAbbreviationReadings("MT", "", "ZION"); err == nil {
-		t.Skip("embedded data has the conflicted-abbreviation filter; test its answers instead")
+	for _, tc := range []struct{ word, prev, next, want string }{
+		{"MT", "", "ZION", "MOUNT"},
+		{"MT", "", "SKY", "MONTANA"},
+	} {
+		got, err := zc.ConflictedAbbreviationReadings(tc.word, tc.prev, tc.next)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, r := range got {
+			found = found || r == tc.want
+		}
+		if !found {
+			t.Errorf("Readings(%q, %q, %q) = %v, want it to include %q", tc.word, tc.prev, tc.next, got, tc.want)
+		}
 	}
 }
