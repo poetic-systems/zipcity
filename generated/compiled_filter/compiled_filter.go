@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const DataFilesSHA256 = "98b19aff09ceca376c05940fd22634aa9b8b165804a8eaf8853537dc7ec74e2e"
+const DataFilesSHA256 = "a1e9725af95946e87a420ebc3a8093ef5e5914ba98bf83887c6de387875d74da"
 
 var zip5pattern = regexp.MustCompile(`^\d{5}$`)
 
