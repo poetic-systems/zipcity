@@ -14,6 +14,7 @@ import (
 	"github.com/poetic-systems/zipcity/generated/compiled_filter"
 	"github.com/poetic-systems/zipcity/internal/bloomdata"
 	"github.com/poetic-systems/zipcity/internal/bloomkeys"
+	"github.com/poetic-systems/zipcity/internal/cityabbrev"
 	"github.com/poetic-systems/zipcity/internal/conflictedabrev"
 	"github.com/poetic-systems/zipcity/internal/matchcache"
 	"github.com/poetic-systems/zipcity/internal/zipcities"
@@ -42,6 +43,7 @@ type ZipCity struct {
 	fs                   filterfs.Init
 	filters              *bloomdata.BloomData
 	zipsByStateCity      func() map[string][]string
+	citiesByState        func() map[string][]string
 	matchCacheSize       int
 	zipStreetCache       *matchcache.Cache[zipStreetKey, Match]
 	cityStateStreetCache *matchcache.Cache[cityStateStreetKey, Match]
@@ -116,6 +118,20 @@ func New(opts ...Option) (*ZipCity, error) {
 			inverted[key] = slices.Compact(inverted[key])
 		}
 		return inverted
+	})
+
+	// citiesByState is the city names seen in each state, sorted, for
+	// CitiesMatching to scan. Derived from zipsByStateCity's keys.
+	zc.citiesByState = sync.OnceValue(func() map[string][]string {
+		out := map[string][]string{}
+		for key := range zc.zipsByStateCity() {
+			state, city, _ := strings.Cut(key, ":")
+			out[state] = append(out[state], city)
+		}
+		for _, cities := range out {
+			slices.Sort(cities)
+		}
+		return out
 	})
 
 	return zc, nil
@@ -436,4 +452,19 @@ func (zc *ZipCity) ZipsKnownFor(state, city string) iter.Seq[string] {
 			}
 		}
 	}
+}
+
+// CityCandidate is a city name offered as a reading of an abbreviation, and
+// how it was reached. See CitiesMatching.
+type CityCandidate = cityabbrev.Candidate
+
+// CitiesMatching ranks the cities seen in a state as readings of an
+// abbreviated city name, for a caller with no ZIP Code to look the city up
+// by: initialism (NY for NEW YORK), prefix, vowels dropped (GLNDL), then a
+// fuzzy match. Strongest rule first. Like ZipsKnownFor it is a starting
+// point, not an answer: an empty result is not evidence against the
+// abbreviation. See poetic-systems/zipcity#83.
+func (zc *ZipCity) CitiesMatching(state, abbr string) []CityCandidate {
+	state = bloomkeys.Normalize(state)
+	return cityabbrev.Match(bloomkeys.City(abbr), zc.citiesByState()[state])
 }
