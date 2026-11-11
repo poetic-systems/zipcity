@@ -36,29 +36,51 @@ type Candidate struct {
 	City  string
 	Rule  Rule
 	Score float32 // similarity in [0,1]; 1 for the exact rules
+	Zips  int     // ZIP Codes the name has been seen for: a proxy for how likely a person means it
 }
 
 // MinFuzzy is the similarity below which Fuzzy does not offer a name.
 const MinFuzzy = 0.8
 
-// Match ranks names as readings of abbr: by rule, then score descending, then
-// name. abbr and names are expected normalized (bloomkeys.City). A name equal
-// to abbr is not an abbreviation of itself and is skipped.
-func Match(abbr string, names []string) []Candidate {
+// Match ranks names as readings of abbr: by rule, then ZIP count descending
+// (zips may be nil), then score descending, then name. abbr and names are
+// expected normalized (bloomkeys.City). A name equal to abbr is not an
+// abbreviation of itself and is skipped. The Fuzzy rule is the expensive one
+// (an edit distance per name) and the weakest, so it only runs when the
+// cheaper rules reached nothing.
+func Match(abbr string, names []string, zips func(name string) int) []Candidate {
 	abbr = strings.TrimSpace(abbr)
+	if abbr == "" {
+		return nil
+	}
 	var out []Candidate
 	for _, name := range names {
-		if name == abbr || abbr == "" {
-			continue
+		if name != abbr {
+			if c, ok := reach(abbr, name); ok {
+				out = append(out, c)
+			}
 		}
-		if c, ok := reach(abbr, name); ok {
-			out = append(out, c)
+	}
+	if len(out) == 0 {
+		for _, name := range names {
+			if name != abbr {
+				if c, ok := fuzzy(abbr, name); ok {
+					out = append(out, c)
+				}
+			}
+		}
+	}
+	if zips != nil {
+		for i := range out {
+			out[i].Zips = zips(out[i].City)
 		}
 	}
 	slices.SortFunc(out, func(a, b Candidate) int {
 		switch {
 		case a.Rule != b.Rule:
 			return int(a.Rule) - int(b.Rule)
+		case a.Zips != b.Zips:
+			return b.Zips - a.Zips
 		case a.Score != b.Score:
 			if a.Score > b.Score {
 				return -1
@@ -73,14 +95,24 @@ func Match(abbr string, names []string) []Candidate {
 func reach(abbr, name string) (Candidate, bool) {
 	switch {
 	case initialism(name) == abbr:
-		return Candidate{name, Initialism, 1}, true
+		return Candidate{City: name, Rule: Initialism, Score: 1}, true
 	case len(abbr) >= 3 && strings.HasPrefix(name, abbr):
-		return Candidate{name, Prefix, 1}, true
-	case len(abbr) >= 3 && subsequence(abbr, name):
-		return Candidate{name, Subsequence, float32(len(abbr)) / float32(len(name))}, true
+		return Candidate{City: name, Rule: Prefix, Score: 1}, true
+	case subsequence(abbr, name):
+		return Candidate{City: name, Rule: Subsequence, Score: float32(len(abbr)) / float32(len(name))}, true
+	}
+	return Candidate{}, false
+}
+
+// fuzzy offers name when abbr is within MinFuzzy of it. A similarity of
+// MinFuzzy needs the lengths within (1-MinFuzzy) of each other, which rules
+// most names out before any edit distance is computed.
+func fuzzy(abbr, name string) (Candidate, bool) {
+	if d := len(abbr) - len(name); float32(max(d, -d)) > (1-MinFuzzy)*float32(max(len(abbr), len(name))) {
+		return Candidate{}, false
 	}
 	if s, err := edlib.StringsSimilarity(abbr, name, edlib.DamerauLevenshtein); err == nil && s >= MinFuzzy {
-		return Candidate{name, Fuzzy, s}, true
+		return Candidate{City: name, Rule: Fuzzy, Score: s}, true
 	}
 	return Candidate{}, false
 }

@@ -466,5 +466,7 @@ type CityCandidate = cityabbrev.Candidate
 // abbreviation. See poetic-systems/zipcity#83.
 func (zc *ZipCity) CitiesMatching(state, abbr string) []CityCandidate {
 	state = bloomkeys.Normalize(state)
-	return cityabbrev.Match(bloomkeys.City(abbr), zc.citiesByState()[state])
+	zips := zc.zipsByStateCity()
+	return cityabbrev.Match(bloomkeys.City(abbr), zc.citiesByState()[state],
+		func(city string) int { return len(zips[state+":"+city]) })
 }

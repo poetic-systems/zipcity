@@ -40,3 +40,15 @@ func BenchmarkCitiesMatching(b *testing.B) {
 		zc.CitiesMatching("CA", "GLNDALE")
 	}
 }
+
+func BenchmarkCitiesMatchingFuzzyFallback(b *testing.B) {
+	zc, err := zipcity.New()
+	if err != nil {
+		b.Fatal(err)
+	}
+	zc.CitiesMatching("CA", "GLNEDALE") // build the index
+	b.ResetTimer()
+	for range b.N {
+		zc.CitiesMatching("CA", "GLNEDALE") // transposition: only Fuzzy reaches it
+	}
+}
