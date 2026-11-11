@@ -11,6 +11,7 @@ require (
 
 require (
 	github.com/bits-and-blooms/bitset v1.25.0 // indirect
+	github.com/hbollon/go-edlib v1.7.0 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	golang.org/x/net v0.57.0 // indirect
 )
