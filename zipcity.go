@@ -468,3 +468,8 @@ func (zc *ZipCity) CitiesMatching(state, abbr string) []CityCandidate {
 	state = bloomkeys.Normalize(state)
 	return cityabbrev.Match(bloomkeys.City(abbr), zc.citiesByState()[state])
 }
+
+// CityNames lists the cities seen in a state, sorted.
+func (zc *ZipCity) CityNames(state string) []string {
+	return zc.citiesByState()[bloomkeys.Normalize(state)]
+}
